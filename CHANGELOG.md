@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0](https://github.com/orchard-suite/tally/compare/v0.0.47...v1.0.0) (2026-11-23)
+
+### ⚠ BREAKING CHANGES
+
+* **tally:** open the source in orchard ([743d77f](https://github.com/orchard-suite/tally/commit/743d77f6f75246d7a5503617d44c4be615230b18))
+
+### Features
+
+* **tally:** open the source in orchard ([743d77f](https://github.com/orchard-suite/tally/commit/743d77f6f75246d7a5503617d44c4be615230b18))
+
 ## 0.0.47 (2026-11-23)
 
 ### Bug Fixes
