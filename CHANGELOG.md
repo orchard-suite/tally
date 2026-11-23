@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0](https://github.com/orchard-suite/tally/compare/v1.1.0...v1.2.0) (2026-11-23)
+
+### Features
+
+* **tally:** refresh this computer on every list ([8d4bb17](https://github.com/orchard-suite/tally/commit/8d4bb17e349361646e72fb48acabeaca7f1da1dc))
+
+### Bug Fixes
+
+* **tally:** wait for key vault when pinning ([43aa5d3](https://github.com/orchard-suite/tally/commit/43aa5d350f8b72f9c139c9c8e7da1a70fd9cf2e1))
+
 ## [1.1.0](https://github.com/orchard-suite/tally/compare/v1.0.0...v1.1.0) (2026-11-23)
 
 ### Features
