@@ -21,9 +21,9 @@
 # rotation's secret and the active account's. CLAUDE_ROTATION_NAMESPACE
 # (default tally), CLAUDE_ROTATION_PIN (default claude-pin), and
 # CLAUDE_ROTATION_CONTEXT (default the current one) say where tally's pin
-# config map is. CLAUDE_ROTATION_AFTER is a command run once a pin has
-# reached Key Vault, and after an unpin: one that puts this computer on the
-# active account now, without waiting for its next sync.
+# config map is. CLAUDE_ROTATION_AFTER is a command every command runs last
+# (pin once its account has reached Key Vault): one that puts this computer
+# on the active account now, without waiting for its next sync.
 set -euo pipefail
 
 settings=${CLAUDE_ROTATION_SETTINGS:-${XDG_CONFIG_HOME:-$HOME/.config}/tally/rotation.env}
@@ -105,8 +105,11 @@ after() {
 	[[ -z ${CLAUDE_ROTATION_AFTER:-} ]] || bash -c "$CLAUDE_ROTATION_AFTER"
 }
 
+# list shows the rotation as it stands, after first running the after
+# command, so every command leaves this computer on the active account.
 list() {
 	local rotation on pinned
+	after
 	rotation=$(current)
 	jq -r 'to_entries[] | "\(.key + 1). \(.value.account)"' <<<"$rotation"
 	on=$(active_account)
@@ -157,13 +160,11 @@ pin)
 	[[ -n $account ]] || { echo "$email is not in the rotation" >&2; exit 1; }
 	set_pin "$account"
 	reach "$account"
-	after
 	echo "Pinned $account. tally lets go when it hits a limit."
 	list
 	;;
 unpin)
 	set_pin ""
-	after
 	echo "Unpinned. tally picks the account again."
 	list
 	;;

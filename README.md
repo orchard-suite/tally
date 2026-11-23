@@ -410,9 +410,9 @@ CLAUDE_ROTATION_VAULT=kv-example ./claude-rotation list   # the build accounts i
 `pin` writes the account to the `claude-pin` config map, the same one an
 estate's own page may write. The collector checks it every 15 seconds,
 switches to it while it is usable, and empties it when the account hits a
-limit. `pin` returns once Key Vault hands the account out, then runs
-`CLAUDE_ROTATION_AFTER`, so a computer that copies the active account on a
-schedule can take it at once. `make install-rotation` puts the command in `~/.local/bin`; it reads
+limit. `pin` returns once Key Vault hands the account out. Every command, `list`
+too, then runs `CLAUDE_ROTATION_AFTER`, so a computer that copies the active
+account on a schedule takes it at once. `make install-rotation` puts the command in `~/.local/bin`; it reads
 its settings (`CLAUDE_ROTATION_*`, listed at the top of the script) from
 the environment or from `~/.config/tally/rotation.env`.
 
