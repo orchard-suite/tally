@@ -21,7 +21,9 @@
 # rotation's secret and the active account's. CLAUDE_ROTATION_NAMESPACE
 # (default tally), CLAUDE_ROTATION_PIN (default claude-pin), and
 # CLAUDE_ROTATION_CONTEXT (default the current one) say where tally's pin
-# config map is.
+# config map is. CLAUDE_ROTATION_AFTER is a command run once a pin has
+# reached Key Vault, and after an unpin: one that puts this computer on the
+# active account now, without waiting for its next sync.
 set -euo pipefail
 
 settings=${CLAUDE_ROTATION_SETTINGS:-${XDG_CONFIG_HOME:-$HOME/.config}/tally/rotation.env}
@@ -72,13 +74,44 @@ set_pin() {
 	kubectl "${kube[@]}" patch configmap "$pin_map" --type merge -p "$(jq -cn --arg a "$1" '{data: {account: $a}}')" >/dev/null
 }
 
+active_account() {
+	az keyvault secret show ${sub[@]+"${sub[@]}"} --vault-name "$vault" -n "$active_secret" --query value -o tsv 2>/dev/null | jq -r '.account // empty' 2>/dev/null || true
+}
+
+pin_value() {
+	kubectl "${kube[@]}" get configmap "$pin_map" -o jsonpath='{.data.account}'
+}
+
+# reach waits until Key Vault hands every consumer the account: tally reads
+# the pin within seconds, and the cluster pushes its pick within a minute.
+# It fails when tally lets go of the pin instead, because the account has no
+# room left.
+reach() {
+	local deadline=$((SECONDS + 180))
+	echo "Waiting for Key Vault to hand out $1..."
+	while ((SECONDS < deadline)); do
+		[[ $(active_account | tr '[:upper:]' '[:lower:]') == $(tr '[:upper:]' '[:lower:]' <<<"$1") ]] && return 0
+		if [[ -z $(pin_value) ]]; then
+			echo "tally let go of the pin: $1 has hit a limit" >&2
+			return 1
+		fi
+		sleep 5
+	done
+	echo "Key Vault still does not hand out $1 after 3 minutes; is tally running?" >&2
+	return 1
+}
+
+after() {
+	[[ -z ${CLAUDE_ROTATION_AFTER:-} ]] || bash -c "$CLAUDE_ROTATION_AFTER"
+}
+
 list() {
 	local rotation on pinned
 	rotation=$(current)
 	jq -r 'to_entries[] | "\(.key + 1). \(.value.account)"' <<<"$rotation"
-	on=$(az keyvault secret show ${sub[@]+"${sub[@]}"} --vault-name "$vault" -n "$active_secret" --query value -o tsv 2>/dev/null | jq -r '.account // empty' 2>/dev/null || true)
+	on=$(active_account)
 	echo "active: ${on:-none yet}"
-	if pinned=$(kubectl "${kube[@]}" get configmap "$pin_map" -o jsonpath='{.data.account}' 2>/dev/null); then
+	if pinned=$(pin_value 2>/dev/null); then
 		echo "pinned: ${pinned:-none}"
 	else
 		echo "pinned: unreadable (no access to the cluster)"
@@ -123,19 +156,22 @@ pin)
 	account=$(jq -r --arg a "$email" 'first(.[] | select(.account | ascii_downcase == ($a | ascii_downcase)) | .account) // empty' <<<"$rotation")
 	[[ -n $account ]] || { echo "$email is not in the rotation" >&2; exit 1; }
 	set_pin "$account"
-	echo "Pinned $account. tally switches to it within a minute, and lets go when it hits a limit."
+	reach "$account"
+	after
+	echo "Pinned $account. tally lets go when it hits a limit."
 	list
 	;;
 unpin)
 	set_pin ""
-	echo "Unpinned. tally picks the account again within a minute."
+	after
+	echo "Unpinned. tally picks the account again."
 	list
 	;;
 list)
 	list
 	;;
 *)
-	sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 	;;
 esac
