@@ -1,19 +1,36 @@
 #!/usr/bin/env bash
 # The build accounts' rotation file, kept in an Azure Key Vault as the secret
 # `claude-rotation`: the Claude accounts every build service and dev
-# computer shares, each with a token from `claude setup-token`. usage-probe
-# picks among them by what each has left; the order only breaks ties. Run it from a computer signed in to Azure.
+# computer shares, each with a token from `claude setup-token`. tally picks
+# among them by what each has left; the order only breaks ties. Run it from
+# a computer signed in to Azure and, for pin and unpin, to the cluster tally
+# runs in.
 #
 #   claude-rotation add EMAIL       mint a token for the account and add it last
 #   claude-rotation order EMAIL...  the order that breaks ties
 #   claude-rotation remove EMAIL    take the account out
-#   claude-rotation list            the accounts, and the active one
+#   claude-rotation pin EMAIL       use this account until it hits a limit
+#   claude-rotation unpin           let tally pick again
+#   claude-rotation list            the accounts, the active one, and the pin
 #
+# Settings come from the environment, or from
+# ~/.config/tally/rotation.env (KEY=VALUE lines); the environment wins.
 # CLAUDE_ROTATION_VAULT names the vault. CLAUDE_ROTATION_SUBSCRIPTION names
 # its subscription, so a default `az` subscription in another tenant does not
 # fail every read. CLAUDE_ROTATION_SECRET and CLAUDE_ROTATION_ACTIVE name the
-# rotation's secret and the active account's.
+# rotation's secret and the active account's. CLAUDE_ROTATION_NAMESPACE
+# (default tally), CLAUDE_ROTATION_PIN (default claude-pin), and
+# CLAUDE_ROTATION_CONTEXT (default the current one) say where tally's pin
+# config map is.
 set -euo pipefail
+
+settings=${CLAUDE_ROTATION_SETTINGS:-${XDG_CONFIG_HOME:-$HOME/.config}/tally/rotation.env}
+if [[ -f $settings ]]; then
+	while IFS='=' read -r key value; do
+		[[ $key =~ ^CLAUDE_ROTATION_[A-Z_]+$ ]] || continue
+		[[ -n ${!key:-} ]] || export "$key=$value"
+	done <"$settings"
+fi
 
 vault=${CLAUDE_ROTATION_VAULT:?set CLAUDE_ROTATION_VAULT to the Key Vault that holds the rotation}
 secret=${CLAUDE_ROTATION_SECRET:-claude-rotation}
@@ -22,6 +39,11 @@ sub=()
 if [[ -n ${CLAUDE_ROTATION_SUBSCRIPTION:-} ]]; then
 	sub=(--subscription "$CLAUDE_ROTATION_SUBSCRIPTION")
 fi
+kube=(-n "${CLAUDE_ROTATION_NAMESPACE:-tally}")
+if [[ -n ${CLAUDE_ROTATION_CONTEXT:-} ]]; then
+	kube+=(--context "$CLAUDE_ROTATION_CONTEXT")
+fi
+pin_map=${CLAUDE_ROTATION_PIN:-claude-pin}
 
 # The rotation as it stands. A rotation that does not exist yet is empty; any
 # other failure stops the script, so it never writes over what it could not
@@ -41,16 +63,26 @@ save() {
 	value=$(cat)
 	jq -e 'type == "array"' >/dev/null <<<"$value"
 	az keyvault secret set ${sub[@]+"${sub[@]}"} --vault-name "$vault" -n "$secret" --value "$value" \
-		--description "Claude build accounts in rotation order, with their tokens; read by usage-probe" -o none
+		--description "Claude build accounts in rotation order, with their tokens; read by tally" -o none
+}
+
+# set_pin writes the account tally must use, or none. tally reads it within
+# seconds and empties it itself when that account hits a limit.
+set_pin() {
+	kubectl "${kube[@]}" patch configmap "$pin_map" --type merge -p "$(jq -cn --arg a "$1" '{data: {account: $a}}')" >/dev/null
 }
 
 list() {
-	local rotation
+	local rotation on pinned
 	rotation=$(current)
 	jq -r 'to_entries[] | "\(.key + 1). \(.value.account)"' <<<"$rotation"
-	local on
 	on=$(az keyvault secret show ${sub[@]+"${sub[@]}"} --vault-name "$vault" -n "$active_secret" --query value -o tsv 2>/dev/null | jq -r '.account // empty' 2>/dev/null || true)
 	echo "active: ${on:-none yet}"
+	if pinned=$(kubectl "${kube[@]}" get configmap "$pin_map" -o jsonpath='{.data.account}' 2>/dev/null); then
+		echo "pinned: ${pinned:-none}"
+	else
+		echo "pinned: unreadable (no access to the cluster)"
+	fi
 }
 
 case "${1:-}" in
@@ -85,11 +117,25 @@ remove)
 	jq --arg a "$email" '[.[] | select(.account | ascii_downcase != ($a | ascii_downcase))]' <<<"$rotation" | save
 	list
 	;;
+pin)
+	email=${2:?usage: claude-rotation pin EMAIL}
+	rotation=$(current)
+	account=$(jq -r --arg a "$email" 'first(.[] | select(.account | ascii_downcase == ($a | ascii_downcase)) | .account) // empty' <<<"$rotation")
+	[[ -n $account ]] || { echo "$email is not in the rotation" >&2; exit 1; }
+	set_pin "$account"
+	echo "Pinned $account. tally switches to it within a minute, and lets go when it hits a limit."
+	list
+	;;
+unpin)
+	set_pin ""
+	echo "Unpinned. tally picks the account again within a minute."
+	list
+	;;
 list)
 	list
 	;;
 *)
-	sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 	;;
 esac

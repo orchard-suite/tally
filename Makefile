@@ -3,13 +3,14 @@ VERSION := $(shell cut -d' ' -f1 VERSION)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 IMAGE := ghcr.io/orchard-suite/tally
 
-.PHONY: check test build docker run land install-ship
+.PHONY: check test build docker run land install-ship install-rotation
 
 # Everything that must pass before a commit.
 check:
 	@test -z "$$(gofmt -l .)" || { gofmt -l .; echo "gofmt: the files above need formatting" >&2; exit 1; }
 	go vet ./...
 	go test ./...
+	./claude-rotation_test.sh
 
 test:
 	go test ./...
@@ -48,6 +49,11 @@ install-ship:
 	@# bootout returns before launchd lets go of the label; bootstrap fails until it does.
 	@for i in $$(seq 50); do launchctl print gui/$$(id -u)/$(SHIP_LABEL) >/dev/null 2>&1 || break; sleep 0.2; done
 	launchctl bootstrap gui/$$(id -u) $(SHIP_PLIST)
+
+# The build-account rotation's command, into ~/.local/bin. Its settings
+# are in ~/.config/tally/rotation.env or the environment.
+install-rotation:
+	install -m 755 claude-rotation $(HOME)/.local/bin/claude-rotation
 
 # Lands on main after the check passes. From a worktree:
 # make land BRANCH=<branch>.

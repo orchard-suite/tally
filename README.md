@@ -402,8 +402,17 @@ map, its tests, and its commands.
 tally check                    # read every account once and print the limits; push nothing
 tally login claude <email>     # sign an account in (claude, codex, or grok)
 tally logout codex <email>     # forget an account
-CLAUDE_ROTATION_VAULT=kv-example ./claude-rotation list   # the build accounts in Key Vault, and the active one
+CLAUDE_ROTATION_VAULT=kv-example ./claude-rotation list   # the build accounts in Key Vault, the active one, and the pin
+./claude-rotation pin ada@example.com   # use this account until it hits a limit
+./claude-rotation unpin                 # let tally pick again
 ```
+
+`pin` writes the account to the `claude-pin` config map, the same one an
+estate's own page may write. The collector checks it every 15 seconds,
+switches to it while it is usable, and empties it when the account hits a
+limit. `make install-rotation` puts the command in `~/.local/bin`; it reads
+its settings (`CLAUDE_ROTATION_*`, listed at the top of the script) from
+the environment or from `~/.config/tally/rotation.env`.
 
 The image also answers to `usage-probe`, so
 `kubectl exec ... usage-probe login` lines written for it keep working. The CLIs it asks are
