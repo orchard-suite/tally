@@ -1,0 +1,168 @@
+name: Build
+
+# The release workflow calls this with the new tag, such as v0.1.0. It
+# publishes ghcr.io/orchard-suite/tally:0.1.0 for linux/amd64, signs it with cosign
+# keyless as this workflow's GitHub identity, and attests a syft SBOM to
+# it. Beside it, the ship job publishes the binary a fleet's machines run
+# `tally ship` from, for macOS and Windows, as one signed OCI artifact,
+# ghcr.io/orchard-suite/tally:ship-0.1.0, one layer a file, so an estate's forge
+# can verify and serve it with no GitHub credential. The tag must match
+# VERSION; that file is the source of truth.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+env:
+  IMAGE: ghcr.io/orchard-suite/tally
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Needed to get an OIDC token for keyless signing.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Check the tag matches VERSION
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          version=$(cut -d' ' -f1 VERSION)
+          if [ "v$version" != "$TAG" ]; then
+            echo "Tag $TAG does not match VERSION $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        id: push
+        with:
+          context: .
+          platforms: linux/amd64
+          # By digest only: the tags come last, once the image is signed.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=tally: the estate cost meter
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: sigstore/cosign-installer@v3
+      - uses: anchore/sbom-action/download-syft@v0
+      # Sign and attest by digest, never by tag: a tag can move.
+      - name: Sign the image
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+      - name: Attest the SBOM
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          syft "${IMAGE}@${DIGEST}" -o spdx-json > sbom.spdx.json
+          cosign attest --yes --predicate sbom.spdx.json --type spdxjson "${IMAGE}@${DIGEST}"
+      - name: Verify what was published
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/'
+          cosign verify-attestation "${IMAGE}@${DIGEST}" --type spdxjson \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/' > /dev/null
+      # Last: whatever follows the version tags sees one only once the image
+      # it names is signed and verified.
+      - name: Tag the version
+        run: |
+          tag() {
+            ref=$1; shift
+            for t in "$@"; do
+              docker buildx imagetools create --tag "$t" "$ref"
+              got=$(docker buildx imagetools inspect "$t" --format '{{json .Manifest.Digest}}' | tr -d '"')
+              [ "$got" = "${ref#*@}" ] || { echo "$t is $got, not the signed ${ref#*@}" >&2; exit 1; }
+            done
+          }
+          tag "${{ env.IMAGE }}@${{ steps.push.outputs.digest }}" "${{ env.IMAGE }}:${{ steps.version.outputs.version }}"
+
+  ship:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Check the tag matches VERSION
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          version=$(cut -d' ' -f1 VERSION)
+          if [ "v$version" != "$TAG" ]; then
+            echo "Tag $TAG does not match VERSION $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # One file a platform, named so a script picks its own by name.
+      - name: Build the shipper
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eu
+          mkdir -p ship
+          for target in darwin/arm64 darwin/amd64 windows/amd64; do
+            os=${target%/*}; arch=${target#*/}; ext=""
+            [ "$os" = windows ] && ext=.exe
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "ship/tally-$os-$arch$ext" ./cmd/tally
+          done
+          (cd ship && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+      - uses: oras-project/setup-oras@v1
+      - uses: sigstore/cosign-installer@v3
+      - name: Push the shipper as an OCI artifact
+        id: push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eu
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+          cd ship
+          oras push "${IMAGE}:ship-${VERSION}" \
+            --artifact-type application/vnd.orchard-suite.tally-ship.v1 \
+            --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --annotation "org.opencontainers.image.version=${VERSION}" \
+            --format go-template='{{.digest}}' \
+            tally-darwin-arm64:application/octet-stream \
+            tally-darwin-amd64:application/octet-stream \
+            tally-windows-amd64.exe:application/octet-stream \
+            SHA256SUMS:text/plain > ../digest.txt
+          echo "digest=$(cat ../digest.txt)" >> "$GITHUB_OUTPUT"
+      - name: Sign and verify the shipper
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "$REF"
+          cosign verify "$REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/' > /dev/null

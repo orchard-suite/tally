@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# The build accounts' rotation file, kept in an Azure Key Vault as the secret
+# `claude-rotation`: the Claude accounts every build service and dev
+# computer shares, each with a token from `claude setup-token`. usage-probe
+# picks among them by what each has left; the order only breaks ties. Run it from a computer signed in to Azure.
+#
+#   claude-rotation add EMAIL       mint a token for the account and add it last
+#   claude-rotation order EMAIL...  the order that breaks ties
+#   claude-rotation remove EMAIL    take the account out
+#   claude-rotation list            the accounts, and the active one
+#
+# CLAUDE_ROTATION_VAULT names the vault. CLAUDE_ROTATION_SUBSCRIPTION names
+# its subscription, so a default `az` subscription in another tenant does not
+# fail every read. CLAUDE_ROTATION_SECRET and CLAUDE_ROTATION_ACTIVE name the
+# rotation's secret and the active account's.
+set -euo pipefail
+
+vault=${CLAUDE_ROTATION_VAULT:?set CLAUDE_ROTATION_VAULT to the Key Vault that holds the rotation}
+secret=${CLAUDE_ROTATION_SECRET:-claude-rotation}
+active_secret=${CLAUDE_ROTATION_ACTIVE:-claude-token-dev-active}
+sub=()
+if [[ -n ${CLAUDE_ROTATION_SUBSCRIPTION:-} ]]; then
+	sub=(--subscription "$CLAUDE_ROTATION_SUBSCRIPTION")
+fi
+
+# The rotation as it stands. A rotation that does not exist yet is empty; any
+# other failure stops the script, so it never writes over what it could not
+# read.
+current() {
+	local n
+	n=$(az keyvault secret list ${sub[@]+"${sub[@]}"} --vault-name "$vault" --query "length([?name=='$secret'])" -o tsv)
+	if [[ $n == 1 ]]; then
+		az keyvault secret show ${sub[@]+"${sub[@]}"} --vault-name "$vault" -n "$secret" --query value -o tsv
+	else
+		echo '[]'
+	fi
+}
+
+save() {
+	local value
+	value=$(cat)
+	jq -e 'type == "array"' >/dev/null <<<"$value"
+	az keyvault secret set ${sub[@]+"${sub[@]}"} --vault-name "$vault" -n "$secret" --value "$value" \
+		--description "Claude build accounts in rotation order, with their tokens; read by usage-probe" -o none
+}
+
+list() {
+	local rotation
+	rotation=$(current)
+	jq -r 'to_entries[] | "\(.key + 1). \(.value.account)"' <<<"$rotation"
+	local on
+	on=$(az keyvault secret show ${sub[@]+"${sub[@]}"} --vault-name "$vault" -n "$active_secret" --query value -o tsv 2>/dev/null | jq -r '.account // empty' 2>/dev/null || true)
+	echo "active: ${on:-none yet}"
+}
+
+case "${1:-}" in
+add)
+	email=${2:?usage: claude-rotation add EMAIL}
+	echo "A browser opens to sign in. Sign in as $email, then approve."
+	echo "Claude Code prints a token that starts with sk-ant-oat01-."
+	claude setup-token
+	read -rsp "Paste that token: " token
+	echo
+	[[ $token == sk-ant-* ]] || { echo "that is not a Claude token" >&2; exit 1; }
+	rotation=$(current)
+	jq --arg a "$email" --arg t "$token" '[.[] | select(.account | ascii_downcase != ($a | ascii_downcase))] + [{account: $a, token: $t}]' <<<"$rotation" | save
+	unset token
+	list
+	;;
+order)
+	shift
+	[[ $# -gt 0 ]] || { echo "usage: claude-rotation order EMAIL..." >&2; exit 2; }
+	want=$(printf '%s\n' "$@" | jq -R . | jq -s .)
+	rotation=$(current)
+	jq --argjson want "$want" '
+		. as $all
+		| if ($want | length) != ($all | length) then error("name every account in the rotation, once each") else . end
+		| [$want[] as $w | $all[] | select(.account | ascii_downcase == ($w | ascii_downcase))]
+		| if length != ($all | length) then error("an email is not in the rotation") else . end' <<<"$rotation" | save
+	list
+	;;
+remove)
+	email=${2:?usage: claude-rotation remove EMAIL}
+	rotation=$(current)
+	jq --arg a "$email" '[.[] | select(.account | ascii_downcase != ($a | ascii_downcase))]' <<<"$rotation" | save
+	list
+	;;
+list)
+	list
+	;;
+*)
+	sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+	exit 2
+	;;
+esac

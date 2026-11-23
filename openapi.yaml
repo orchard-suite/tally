@@ -1,0 +1,852 @@
+openapi: 3.1.0
+info:
+  title: Tally
+  version: "1"
+  summary: What the estate costs, and the agent work machines ship to it.
+  description: |
+    Tally answers on two ports. The session port serves the board and its
+    JSON (GET /v1/costs, /v1/agents, /v1/agents/days, /v1/pools). It sits
+    behind the front door, which signs a person in and passes who
+    they are in X-Forwarded-Email and their roles in X-Forwarded-Groups;
+    only the front door may reach it. The API port takes each machine's
+    shipper posts (POST /v1/usage), let in by the machine's bearer token
+    alone.
+
+    Every error is a plain text message, one line long.
+tags:
+  - name: costs
+    description: The Tally costs API, on the session port.
+  - name: usage
+    description: The Tally usage intake, on the API port.
+security:
+  - frontDoor: []
+paths:
+  /v1/costs:
+    get:
+      operationId: getCosts
+      tags: [costs]
+      summary: The estate's costs, their trend, and the collectors
+      description: |
+        Cost per month by category, each host, each namespace, each AI
+        account and cloud line, the right-sizing list, the headline
+        figures, each category's trend over the last thirty days, and how
+        each collector's rounds went.
+      security:
+        - frontDoor: []
+      responses:
+        "200":
+          description: The board.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "401": { $ref: "#/components/responses/SignedOut" }
+        "403": { $ref: "#/components/responses/NotYours" }
+  /v1/agents:
+    get:
+      operationId: getAgentDay
+      tags: [costs]
+      summary: One day of agent work
+      description: |
+        The agent work of one day: totals, spend by model, and, for a
+        person who holds the roles for them, spend by machine and the
+        works and conversations themselves. Without a day it is today.
+      security:
+        - frontDoor: []
+      parameters:
+        - name: day
+          in: query
+          description: The day, as a date. Today when left out.
+          schema: { type: string, format: date }
+        - $ref: "#/components/parameters/Zone"
+      responses:
+        "200":
+          description: The day's report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/SignedOut" }
+        "403": { $ref: "#/components/responses/NotYours" }
+        "404": { $ref: "#/components/responses/AgentsOff" }
+        "500": { $ref: "#/components/responses/Failed" }
+  /v1/agents/days:
+    get:
+      operationId: listAgentDays
+      tags: [costs]
+      summary: Agent work for each day in a span
+      description: Every day from `from` through `to`, empty days included, for the heat map.
+      security:
+        - frontDoor: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: The first day, as a date.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: The last day, as a date, on or after `from` and a limited number of days after it.
+          schema: { type: string, format: date }
+        - $ref: "#/components/parameters/Zone"
+      responses:
+        "200":
+          description: One entry a day, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Day" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/SignedOut" }
+        "403": { $ref: "#/components/responses/NotYours" }
+        "404": { $ref: "#/components/responses/AgentsOff" }
+        "500": { $ref: "#/components/responses/Failed" }
+  /v1/agents/uses:
+    get:
+      operationId: listAgentUses
+      tags: [costs]
+      summary: The skills, commands, and tools agents used
+      description: |
+        Over the last `days`, each skill an agent loaded, each slash command
+        a person typed, and each tool an agent called, most used first, with
+        how many conversations and machines used it. It names what was used
+        and never who, or what it was asked.
+      security:
+        - frontDoor: []
+      parameters:
+        - name: days
+          in: query
+          required: false
+          description: How many days back, from 1 to 90; 30 when left out.
+          schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+      responses:
+        "200":
+          description: The uses.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [days, uses]
+                properties:
+                  days: { type: integer }
+                  uses:
+                    type: array
+                    items: { $ref: "#/components/schemas/Use" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/SignedOut" }
+        "403": { $ref: "#/components/responses/NotYours" }
+        "404": { $ref: "#/components/responses/AgentsOff" }
+        "500": { $ref: "#/components/responses/Failed" }
+  /v1/pools:
+    get:
+      operationId: listPools
+      tags: [costs]
+      summary: Every subscription pool, recorded and projected
+      description: |
+        The subscriptions' limits added into one pool per provider and
+        scope, with what was used and where it is headed. Empty when tally
+        reads no Prometheus.
+      security:
+        - frontDoor: []
+      responses:
+        "200":
+          description: The pools.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Pool" }
+        "401": { $ref: "#/components/responses/SignedOut" }
+        "403": { $ref: "#/components/responses/NotYours" }
+        "502": { $ref: "#/components/responses/PoolsUnread" }
+  /v1/gateway/keys:
+    get:
+      operationId: listGatewayKeys
+      tags: [costs]
+      summary: What every AI gateway key used in a month
+      description: |
+        Each gateway key's tokens and their cost at API prices for one
+        month, the costliest first, and, once the month is billed, its
+        share of the bill's basis in proportion to that cost. A key names a
+        person or an app, so only a person with the detail role sees it.
+        Only served when the gateway collector is on.
+      security:
+        - frontDoor: []
+      parameters:
+        - name: month
+          in: query
+          description: The month, such as 2026-10, in the board's zone. This month when left out.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The keys.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayKeys" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/SignedOut" }
+        "403": { $ref: "#/components/responses/NotYours" }
+        "404": { $ref: "#/components/responses/GatewayOff" }
+  /v1/usage:
+    post:
+      operationId: postUsage
+      tags: [usage]
+      summary: Post a machine's agent work
+      description: |
+        One batch from a machine's shipper. The machine is the token's,
+        never the body's. Every record is an upsert, and a bucket carries a
+        whole minute's totals, so a batch sent twice is stored once. Only
+        served when the agents collector is on.
+      security:
+        - shipToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Batch" }
+      responses:
+        "204":
+          description: Stored.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/UnknownToken" }
+        "500": { $ref: "#/components/responses/Failed" }
+    delete:
+      operationId: withdrawUsage
+      tags: [usage]
+      summary: Withdraw everything a machine posted
+      description: |
+        Deletes every work, conversation, and bucket the token's machine
+        ever posted, so its shipper can post again from the start. A
+        machine withdraws only its own. Only served when the agents
+        collector is on.
+      security:
+        - shipToken: []
+      responses:
+        "204":
+          description: Withdrawn.
+        "401": { $ref: "#/components/responses/UnknownToken" }
+        "500": { $ref: "#/components/responses/Failed" }
+components:
+  securitySchemes:
+    frontDoor:
+      type: apiKey
+      in: header
+      name: X-Forwarded-Email
+      description: |
+        The front door signs the person in and sets
+        X-Forwarded-Email, and their roles in X-Forwarded-Groups. A request
+        without an email is refused with 401; one without a role the board
+        takes is refused with 403.
+    shipToken:
+      type: http
+      scheme: bearer
+      description: A machine's shipping token. Tally keeps only its SHA-256 and knows the machine by it.
+  parameters:
+    Zone:
+      name: tz
+      in: query
+      description: The zone the days begin in, such as America/Chicago. The board's zone when left out.
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: A parameter or the body is not what the operation takes; the message says which.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+    SignedOut:
+      description: The front door signed no one in.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotYours:
+      description: The person holds no role the board takes, or none the view needs.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+    UnknownToken:
+      description: No bearer token, or one tally does not know.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+    AgentsOff:
+      description: The agents collector is off.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+    GatewayOff:
+      description: The gateway collector is off.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+    PoolsUnread:
+      description: Prometheus could not be read.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+    Failed:
+      description: The store could not be read or written.
+      content:
+        text/plain:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: string
+      description: A one-line message for a person, ending in a newline.
+      examples:
+        - "unknown token\n"
+    Board:
+      type: object
+      required: [generated_at, currency, total_per_month, categories, hosts, namespaces, ai, cloud, rightsizing, headline, workloads, version, trend, collectors]
+      properties:
+        generated_at: { type: string, format: date-time }
+        currency: { type: string, description: The currency of every amount, USD. }
+        total_per_month: { type: number }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/Category" }
+        hosts:
+          type: [array, "null"]
+          description: Null when power is not collected.
+          items: { $ref: "#/components/schemas/Host" }
+        namespaces:
+          type: [array, "null"]
+          description: Each namespace's share of the cluster hosts' cost. Null when the cluster is not collected.
+          items: { $ref: "#/components/schemas/Namespace" }
+        ai:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/AIAccount" }
+        cloud:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/CloudLine" }
+        rightsizing: { $ref: "#/components/schemas/Rightsizing" }
+        ci: { $ref: "#/components/schemas/CI" }
+        agent_spend: { $ref: "#/components/schemas/Spend" }
+        billed:
+          type: array
+          description: The billed months, when the bill is read.
+          items: { $ref: "#/components/schemas/BilledMonth" }
+        reconciliation: { $ref: "#/components/schemas/Reconciliation" }
+        headline:
+          type: array
+          items: { $ref: "#/components/schemas/Figure" }
+        workloads: { type: integer }
+        window: { type: string, description: The span the headline covers, when the bill names one. }
+        version: { type: string }
+        trend:
+          type: object
+          description: Each category's cost per month over the last thirty days, a point a day.
+          additionalProperties:
+            type: array
+            items: { $ref: "#/components/schemas/Point" }
+        collectors:
+          type: array
+          items: { $ref: "#/components/schemas/CollectorStatus" }
+    CI:
+      type: object
+      description: What builds cost by repository, when the runners collector or a forge's bill (actions) is on. A month is the window's rate held for 730 hours.
+      required: [window, hosted, hosted_per_month, repositories]
+      properties:
+        window: { type: string, description: The span minutes are counted over, such as 7d. }
+        pool: { $ref: "#/components/schemas/CIPool" }
+        hosted: { type: boolean, description: Whether a forge's bill is read. }
+        hosted_per_month: { type: number, description: What hosted runners owe a month, after included minutes. }
+        repositories:
+          type: array
+          items: { $ref: "#/components/schemas/CIRepository" }
+    CIPool:
+      type: object
+      description: Where the self-hosted job pods run, and what it costs.
+      required: [namespace, per_month]
+      properties:
+        namespace: { type: string }
+        nodes: { type: string, description: The pattern naming the pool's own nodes, when it has them. }
+        node_hours: { type: number }
+        share: { type: number, description: The namespace's share of the cluster's requested CPU and memory, when it shares the cluster's nodes. }
+        per_month: { type: [number, "null"], description: Null when the pool shares the cluster and the hosts' power is not read. }
+    CIRepository:
+      type: object
+      required: [forge, repository, self_hosted_minutes, self_hosted_per_month, hosted_minutes, hosted_per_month, hosted_gross_per_month]
+      properties:
+        forge: { type: string, enum: [github, gitlab] }
+        repository: { type: string, description: "owner/name on GitHub, the project's path on GitLab, or project <id> when its name is not read." }
+        self_hosted_minutes: { type: number }
+        self_hosted_per_month: { type: [number, "null"], description: Its share of the pool by requested CPU and memory; null when the pool is unpriced. }
+        hosted_minutes: { type: number }
+        hosted_per_month: { type: number, description: What the hosted minutes owe, net. }
+        hosted_gross_per_month: { type: number, description: The hosted minutes at list price. }
+    Category:
+      type: object
+      required: [category, per_month, on]
+      properties:
+        category: { type: string, enum: [power, cloud, ai, ci] }
+        per_month: { type: number }
+        month_to_date: { type: number }
+        previous: { type: number }
+        label: { type: string }
+        "on": { type: boolean }
+    Host:
+      type: object
+      required: [host, watts, cost_per_hour, per_month, cluster]
+      properties:
+        host: { type: string }
+        watts: { type: number }
+        cost_per_hour: { type: number }
+        per_month: { type: number }
+        cluster: { type: boolean }
+    Namespace:
+      type: object
+      required: [namespace, cpu_request_cores, memory_request_bytes, share, per_month]
+      properties:
+        namespace: { type: string }
+        cpu_request_cores: { type: number }
+        memory_request_bytes: { type: number }
+        share: { type: number }
+        per_month: { type: number }
+    AIAccount:
+      type: object
+      required: [provider, account, cost_per_month]
+      properties:
+        provider: { type: string }
+        account: { type: string }
+        plan: { type: string }
+        cost_per_month: { type: number }
+        tokens:
+          type: object
+          description: Tokens by direction this month, when the provider gives them.
+          additionalProperties: { type: integer }
+    CloudLine:
+      type: object
+      required: [provider, account, group, service, currency, trailing, current, previous]
+      properties:
+        provider: { type: string }
+        account: { type: string }
+        group: { type: string }
+        service: { type: string }
+        currency: { type: string }
+        trailing: { type: number }
+        current: { type: number }
+        previous: { type: number }
+    Rightsizing:
+      type: object
+      description: Everything whose size does not fit its use. A workload's CPU is judged at its p95 and its memory at its peak, since past its limit a container is killed.
+      required: [workloads, machines, advisor]
+      properties:
+        window: { type: string, description: What the workloads' use is read over, such as 7d. }
+        cluster: { $ref: "#/components/schemas/Cluster" }
+        workloads:
+          type: array
+          description: Workloads that run now with a container that does not fit, the most urgent verdict first, then the most each change frees or adds.
+          items: { $ref: "#/components/schemas/WorkloadFit" }
+        machines:
+          type: array
+          items: { $ref: "#/components/schemas/Recommendation" }
+        advisor:
+          type: array
+          items: { $ref: "#/components/schemas/Recommendation" }
+    Capacity:
+      type: object
+      required: [cpu, memory]
+      properties:
+        cpu: { type: number, description: Cores. }
+        memory: { type: number, description: Bytes. }
+    Cluster:
+      type: object
+      description: The cluster's room and what the workloads' changes do to it; workloads the platform sizes are left out.
+      required: [allocatable, requested, frees, adds]
+      properties:
+        allocatable: { $ref: "#/components/schemas/Capacity" }
+        requested: { $ref: "#/components/schemas/Capacity" }
+        frees: { $ref: "#/components/schemas/Capacity" }
+        adds: { $ref: "#/components/schemas/Capacity" }
+        per_month: { type: number, description: "What the cluster's hosts cost a month, when they are priced." }
+    WorkloadFit:
+      type: object
+      required: [namespace, workload, kind, pods, verdict, frees, share, containers]
+      properties:
+        namespace: { type: string }
+        workload: { type: string, description: "A deployment, statefulset, daemonset, CronJob (its Jobs folded in), runner set (its runners folded in), or static pod." }
+        kind: { type: string }
+        pods: { type: integer, description: Its pods running or pending now. }
+        managed: { type: boolean, description: "The platform sets its sizes: a static pod, or a namespace K8S_MANAGED names." }
+        verdict: { type: string, enum: [risk, under, unset, over], description: Its most urgent container verdict. }
+        frees: { $ref: "#/components/schemas/Capacity" }
+        share: { type: number, description: "What the changes free as a part of the cluster's room, half by CPU and half by memory; negative where they add." }
+        per_month: { type: number, description: "share of the cluster's cost a month, when it is priced." }
+        containers:
+          type: array
+          items: { $ref: "#/components/schemas/Container" }
+    Container:
+      type: object
+      required: [name, cpu, memory]
+      properties:
+        name: { type: string }
+        cpu: { $ref: "#/components/schemas/Measure" }
+        memory: { $ref: "#/components/schemas/Measure" }
+    Measure:
+      type: object
+      description: One resource of one container in its busiest pod, in cores or bytes.
+      required: [request, limit, p95, peak, recommended]
+      properties:
+        request: { type: number }
+        limit: { type: number }
+        p95: { type: number }
+        peak: { type: number }
+        kills: { type: number, description: "Restarts after an out-of-memory kill over the window (memory)." }
+        throttled: { type: number, description: "The part of its CPU periods its limit held it back in (CPU)." }
+        recommended: { type: number, description: The request that fits. }
+        recommended_limit: { type: number, description: "The limit that stops the trouble or holds the advised request; absent keeps the limit." }
+        verdict: { type: string, enum: [risk, under, unset, over], description: "Absent when it fits." }
+        reason: { type: string, description: Why a risk is one. }
+    Recommendation:
+      type: object
+      description: A server's CPU or memory, or a VM Azure Advisor advises resizing.
+      required: [source, namespace, workload, kind, resource, verdict, request, p95, recommended]
+      properties:
+        source: { type: string, enum: [machines, advisor] }
+        namespace: { type: string, description: "An Azure resource group; empty for a machine." }
+        workload: { type: string, description: A host or a VM. }
+        kind: { type: string }
+        resource: { type: string, enum: [cpu, memory, size] }
+        verdict: { type: string, enum: [over, under, shutdown] }
+        request: { type: number, description: The size it has now, in unit. }
+        p95: { type: number, description: "Its use at the 95th percentile, in unit; for Advisor's advice, CPU in percent of the size." }
+        peak: { type: number, description: "The most memory it used, which memory is sized to." }
+        requested: { type: number, description: "What the Kubernetes pods on a node ask for, with what the node holds back; the size that fits never drops under it." }
+        recommended: { type: number, description: "The size that fits, in unit; 0 for CPU in percent, which names no size." }
+        unit: { type: string, enum: [cores, bytes, percent], description: "Absent for Advisor's advice." }
+        memory_p95: { type: number, description: "Advisor's memory use at the 95th percentile, in percent of the size." }
+        from: { type: string, description: The VM size Advisor found. }
+        to: { type: string, description: The VM size Advisor advises; absent for a shutdown. }
+        savings_per_year: { type: number, description: "What Advisor says the change saves a year, in dollars." }
+        change: { type: string, enum: [shrink, burstable, family, shutdown], description: "Advisor's kind of change: a smaller size in the same family, a step down to burstable, a move to another family, or a shutdown." }
+        decide: { type: boolean, description: "The deployment does not count this kind of change (ADVISOR_COUNT); it waits on a person's decision." }
+    Use:
+      type: object
+      required: [kind, name, count, conversations, machines]
+      properties:
+        kind: { type: string, enum: [skill, command, tool], description: "A skill an agent loaded, a slash command a person typed, or a tool an agent called." }
+        name: { type: string, description: "A plugin's skill or command is <plugin>:<skill>; a plugin's MCP tool is mcp__plugin_<plugin>_<server>__<tool>." }
+        plugin: { type: string, description: The plugin it belongs to, left out for none. }
+        count: { type: integer }
+        conversations: { type: integer }
+        machines: { type: integer }
+    Spend:
+      type: object
+      required: [trailing, month_to_date, previous]
+      properties:
+        trailing: { type: number, description: The last thirty days, a monthly run rate. }
+        month_to_date: { type: number }
+        previous: { type: number }
+    BilledMonth:
+      type: object
+      required: [period, ai, usage, invoice, programs]
+      properties:
+        period: { type: string, description: The month, such as 2026-09. }
+        ai: { type: number }
+        ai_models: { type: number, description: "The part of AI billed for model use, which the AI gateway's calls drive, when the pipeline wrote it." }
+        usage: { type: number }
+        invoice: { type: string }
+        programs:
+          type: array
+          items:
+            type: object
+            required: [program, ai]
+            properties:
+              program: { type: string }
+              ai: { type: number }
+    Reconciliation:
+      type: object
+      description: |
+        AI through three lenses, month by month, when the gateway is read.
+        The bill is the truth for what was paid, the gateway for what was
+        used, and the shippers' conversations are detail on top.
+      required: [months]
+      properties:
+        months:
+          type: array
+          items: { $ref: "#/components/schemas/ReconMonth" }
+    ReconMonth:
+      type: object
+      required: [period, basis_is_models, gateway, shipped, coverage, models]
+      properties:
+        period: { type: string, description: The month, such as 2026-10. }
+        billed: { type: number, description: The bill's AI; absent before the month is billed. }
+        basis: { type: number, description: What the gateway is compared with, the bill's model part or all of its AI; absent before the month is billed. }
+        basis_is_models: { type: boolean, description: True when the basis is the bill's model part. }
+        invoice: { type: string }
+        gateway: { $ref: "#/components/schemas/Lens" }
+        shipped: { $ref: "#/components/schemas/Lens" }
+        gap: { type: number, description: The basis less the gateway's priced estimate; absent before the month is billed. }
+        coverage: { type: number, description: "The share of the gateway's tokens the shippers saw, from 0 to 1." }
+        over:
+          type: array
+          description: Models the shippers posted more tokens of than the gateway measured.
+          items: { type: string }
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/ReconModel" }
+    Lens:
+      type: object
+      required: [tokens, cost, unpriced]
+      properties:
+        tokens: { type: integer }
+        cost: { type: number, description: What the priced tokens cost at API prices. }
+        unpriced: { type: integer, description: Tokens with no model or no price for it. }
+    ReconModel:
+      type: object
+      required: [model, gateway, gateway_cost, shipped, shipped_cost, priced]
+      properties:
+        model: { type: string, description: "The bare model; empty for gateway tokens from before the gateway tagged them with the model." }
+        gateway: { type: integer }
+        gateway_cost: { type: number }
+        shipped: { type: integer }
+        shipped_cost: { type: number }
+        priced: { type: boolean }
+    GatewayKeys:
+      type: object
+      required: [month, keys]
+      properties:
+        month: { type: string }
+        keys:
+          type: array
+          items: { $ref: "#/components/schemas/KeyLine" }
+    KeyLine:
+      type: object
+      required: [key, product, tokens, cost, unpriced]
+      properties:
+        key: { type: string, description: The gateway key, a person's or an app's. }
+        product: { type: string, description: The key's product tier. }
+        tokens: { type: integer }
+        cost: { type: number }
+        unpriced: { type: integer }
+        billed: { type: number, description: "The key's share of the bill's basis, in proportion to its cost; absent before the month is billed." }
+    Figure:
+      type: object
+      required: [label, amount]
+      properties:
+        label: { type: string }
+        amount: { type: number }
+        note: { type: string }
+    Point:
+      type: object
+      required: [t, v]
+      properties:
+        t: { type: string, format: date-time }
+        v: { type: number }
+    CollectorStatus:
+      type: object
+      required: [name, rounds, failed]
+      properties:
+        name: { type: string }
+        rounds: { type: integer }
+        failed: { type: integer }
+        last_run: { type: string, format: date-time }
+        last_success: { type: string, format: date-time }
+    Tokens:
+      type: object
+      description: Token counts by kind. A count left out of a post is zero; a report carries every one.
+      properties:
+        requests: { type: integer, minimum: 0 }
+        input: { type: integer, minimum: 0 }
+        cache_write_5m: { type: integer, minimum: 0 }
+        cache_write_1h: { type: integer, minimum: 0 }
+        cache_read: { type: integer, minimum: 0 }
+        output: { type: integer, minimum: 0 }
+    Report:
+      type: object
+      required: [from, to, totals, billing, zone, shows_users, shows_works, works, machines, models, children, unpriced]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        totals:
+          allOf:
+            - $ref: "#/components/schemas/Tokens"
+            - type: object
+              required: [requests, input, cache_write_5m, cache_write_1h, cache_read, output, total, cost, agent_hours, active_hours]
+              properties:
+                total: { type: integer }
+                cost: { type: number }
+                agent_hours: { type: number }
+                active_hours: { type: number }
+                first: { type: string, format: date-time }
+                last: { type: string, format: date-time }
+        billing: { type: string, description: How the work is paid for, subscription or api. }
+        zone: { type: string }
+        shows_users: { type: boolean, description: Whether machines is filled. }
+        shows_works: { type: boolean, description: Whether works and children are filled. }
+        works:
+          type: array
+          items: { $ref: "#/components/schemas/WorkLine" }
+        machines:
+          type: array
+          items: { $ref: "#/components/schemas/MachineLine" }
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/ModelLine" }
+        children:
+          type: object
+          required: [conversations, total, cost]
+          properties:
+            conversations: { type: integer }
+            total: { type: integer }
+            cost: { type: number }
+        unpriced:
+          type: array
+          description: Models the price table does not list; their tokens count, their cost does not.
+          items: { type: string }
+    WorkLine:
+      type: object
+      required: [id, machine, title, project, total, cost, agent_hours, first, last, children, ongoing, lead, child]
+      properties:
+        id: { type: string }
+        machine: { type: string }
+        title: { type: string }
+        project: { type: string }
+        total: { type: integer }
+        cost: { type: number }
+        agent_hours: { type: number }
+        first: { type: string, format: date-time }
+        last: { type: string, format: date-time }
+        children: { type: integer }
+        ongoing: { type: boolean }
+        lead:
+          type: array
+          items: { $ref: "#/components/schemas/Span" }
+        child:
+          type: array
+          items: { $ref: "#/components/schemas/Span" }
+    Span:
+      type: object
+      description: When agents were active, in minutes from the work's start.
+      required: [s, e]
+      properties:
+        s: { type: integer }
+        e: { type: integer }
+    MachineLine:
+      type: object
+      required: [machine, total, cost, agent_hours, works]
+      properties:
+        machine: { type: string }
+        owner: { type: string }
+        total: { type: integer }
+        cost: { type: number }
+        agent_hours: { type: number }
+        works: { type: integer }
+    ModelLine:
+      type: object
+      required: [model, total, cost, share, priced]
+      properties:
+        model: { type: string }
+        total: { type: integer }
+        cost: { type: number }
+        share: { type: number }
+        priced: { type: boolean }
+    Day:
+      type: object
+      required: [day, total, cost, agent_hours, works]
+      properties:
+        day: { type: string, format: date }
+        total: { type: integer }
+        cost: { type: number }
+        agent_hours: { type: number }
+        works: { type: integer }
+    Pool:
+      type: object
+      required: [provider, window, accounts, capacity, remaining, burn, recorded, projected, refills]
+      properties:
+        provider: { type: string }
+        scope: { type: string, description: The model a limit is kept for; absent for the account-wide one. }
+        window: { type: string }
+        accounts: { type: integer }
+        capacity: { type: number }
+        remaining: { type: number, description: The pool left now, in percent. }
+        burn: { type: number, description: Percent of the pool used an hour. }
+        recorded:
+          type: array
+          items: { $ref: "#/components/schemas/Point" }
+        projected:
+          type: array
+          items: { $ref: "#/components/schemas/Point" }
+        refills:
+          type: array
+          items: { $ref: "#/components/schemas/Refill" }
+        empty: { type: string, format: date-time }
+        first_empty:
+          type: object
+          required: [account, at]
+          properties:
+            account: { type: string }
+            at: { type: string, format: date-time }
+        next_reset: { $ref: "#/components/schemas/Refill" }
+    Refill:
+      type: object
+      required: [at, gain, projected]
+      properties:
+        at: { type: string, format: date-time }
+        gain: { type: number }
+        projected: { type: boolean }
+    Batch:
+      type: object
+      description: At least one record or the installed plugins, and at most 5000 records in all.
+      properties:
+        works:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string, minLength: 1, maxLength: 200 }
+              title: { type: string, maxLength: 300 }
+              project: { type: string, maxLength: 300 }
+        conversations:
+          type: array
+          items:
+            type: object
+            required: [id, work, agent, role]
+            properties:
+              id: { type: string, minLength: 1, maxLength: 200 }
+              work: { type: string, minLength: 1, maxLength: 200 }
+              parent: { type: string, maxLength: 200 }
+              agent: { type: string, minLength: 1, maxLength: 40 }
+              role: { type: string, enum: [lead, child] }
+              title: { type: string, maxLength: 300 }
+        buckets:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/Tokens"
+              - type: object
+                required: [conversation, model, minute]
+                properties:
+                  conversation: { type: string, minLength: 1, maxLength: 200 }
+                  model: { type: string, minLength: 1, maxLength: 100 }
+                  minute: { type: string, format: date-time, description: A whole minute. }
+        uses:
+          type: array
+          description: Each conversation's count of one skill, command, or tool in one minute, in replies of one model. An upsert, like a bucket. It names what was used, never what it was asked. A plugin's use by work that stays on its machine is posted under a digest of the conversation's id, with no conversation or work beside it.
+          items:
+            type: object
+            required: [conversation, model, minute, kind, name, count]
+            properties:
+              conversation: { type: string, minLength: 1, maxLength: 200 }
+              model: { type: string, minLength: 1, maxLength: 100 }
+              minute: { type: string, format: date-time, description: A whole minute. }
+              kind: { type: string, enum: [skill, command, tool] }
+              name: { type: string, minLength: 1, maxLength: 200 }
+              count: { type: integer, minimum: 0 }
+        installed:
+          type: object
+          description: Every plugin the machine has installed, whole, replacing what it said before. Left out, it says nothing; with no plugins, it has none.
+          required: [plugins]
+          properties:
+            plugins:
+              type: array
+              maxItems: 500
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string, minLength: 1, maxLength: 200 }
+                  marketplace: { type: string, maxLength: 200 }
+                  version: { type: string, maxLength: 100 }

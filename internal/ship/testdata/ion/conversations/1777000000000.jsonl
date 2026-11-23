@@ -1,0 +1,3 @@
+{"createdAt": 1777000000000, "id": "1777000000000", "meta": true, "model": "claude-sonnet-4-6", "workingDirectory": "/home/user/old", "totalInputTokens": 3}
+{"id": "l1", "parentId": null, "type": "message", "timestamp": 1777000001000, "data": {"role": "user", "content": [{"type": "text", "text": "fictional"}]}}
+{"id": "l2", "parentId": "l1", "type": "message", "timestamp": 1777000002000, "data": {"role": "assistant", "content": [{"type": "text", "text": "fictional"}], "model": "claude-sonnet-4-6", "usage": {"input_tokens": 3, "output_tokens": 14}}}

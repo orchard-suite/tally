@@ -1,0 +1,1 @@
+{"entity_id":"sensor.ups_load","state":"0.38","attributes":{"unit_of_measurement":"kW","friendly_name":"UPS load"}}

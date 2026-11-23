@@ -1,0 +1,5 @@
+[
+  {"month": "2026-07", "model": "claude-opus-5-5", "requests": 1, "input": 999, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 0},
+  {"month": "2026-09", "model": "claude-opus-5-5", "requests": 9, "input": 1200000, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 100000},
+  {"month": "2026-09", "model": "gpt-5.6-terra", "requests": 3, "input": 3000000, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 0}
+]

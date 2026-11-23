@@ -1,0 +1,6 @@
+[
+ {"blueprint":"finops_program_portfolio_cost","key":"2026-09/alpha","title":"Alpha 2026-09","state":"active","fields":{"ai_cents":1108300,"amount_cents":2000000},"relations":{"period":[{"blueprint":"finops_billing_period","key":"2026-09","title":"2026-09"}],"program_portfolio":[{"blueprint":"program_portfolio","key":"alpha","title":"Alpha"}]}},
+ {"blueprint":"finops_program_portfolio_cost","key":"2026-09/beta","title":"Beta 2026-09","state":"active","fields":{"ai_cents":1820289,"amount_cents":1900000},"relations":{"period":[{"blueprint":"finops_billing_period","key":"2026-09","title":"2026-09"}],"program_portfolio":[{"blueprint":"program_portfolio","key":"beta","title":"Beta"}]}},
+ {"blueprint":"finops_program_portfolio_cost","key":"2026-09/web","title":"Web 2026-09","state":"active","fields":{"ai_cents":0,"amount_cents":437001},"relations":{"period":[{"blueprint":"finops_billing_period","key":"2026-09","title":"2026-09"}],"program_portfolio":[{"blueprint":"program_portfolio","key":"web","title":"Web"}]}},
+ {"blueprint":"finops_program_portfolio_cost","key":"2026-08/alpha","title":"Alpha 2026-08","state":"active","fields":{"ai_cents":3783736,"amount_cents":5000000},"relations":{"period":[{"blueprint":"finops_billing_period","key":"2026-08","title":"2026-08"}],"program_portfolio":[{"blueprint":"program_portfolio","key":"alpha","title":"Alpha"}]}}
+]

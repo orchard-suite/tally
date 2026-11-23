@@ -1,0 +1,2 @@
+{"id": "1790000000500-bbbbbbbbbbbb", "meta": true, "version": 2, "workingDirectory": "/home/user/src/ops"}
+{"id": "b1", "parentId": null, "type": "message", "timestamp": 1790000008000, "data": {"role": "assistant", "content": [{"type": "text", "text": "fictional"}], "model": "claude-sonnet-5-5", "usage": {"input_tokens": 1, "output_tokens": 7}, "stopReason": "end_turn"}}

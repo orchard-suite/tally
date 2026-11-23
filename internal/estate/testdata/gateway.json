@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-02T12:00:00Z",
+  "from": "2026-08-01",
+  "rows": [
+    {"day": "2026-08-10", "key": "dev--ada--max", "product": "dev_pro_max", "model": "", "requests": 0, "input": 5000000, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 0},
+    {"day": "2026-09-20", "key": "dev--ada--max", "product": "dev_pro_max", "model": "claude-opus-5-5", "requests": 10, "input": 1000000, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 100000},
+    {"day": "2026-09-21", "key": "dev--bob--pro", "product": "dev_pro", "model": "claude-opus-5-5", "requests": 4, "input": 500000, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 0},
+    {"day": "2026-09-21", "key": "app--1--team--svc--job", "product": "enterprise_production", "model": "gpt-5.6-terra", "requests": 2, "input": 2000000, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 10000},
+    {"day": "2026-10-01", "key": "dev--ada--max", "product": "dev_pro_max", "model": "claude-sonnet-9", "requests": 1, "input": 100, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0, "output": 10}
+  ]
+}

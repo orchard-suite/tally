@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-02T12:00:00Z",
+  "months": [
+    {"period": "2026-08", "ai": 50, "usage": 500, "invoice": "reconciled", "programs": []},
+    {"period": "2026-09", "ai": 100, "ai_models": 80, "usage": 600, "invoice": "pending", "programs": []}
+  ]
+}

@@ -1,0 +1,3 @@
+{"id": "1790000900000-cccccccccccc", "meta": true, "version": 2, "workingDirectory": "/home/user/src/ops"}
+{"id": "a2", "parentId": null, "type": "message", "timestamp": 1790000005000, "data": {"role": "assistant", "content": [{"type": "text", "text": "fictional"}], "model": "claude-opus-5-5", "usage": {"input_tokens": 10, "output_tokens": 100, "cache_read_input_tokens": 5000, "cache_creation_input_tokens": 2000}, "stopReason": "end_turn"}}
+{"id": "c1", "parentId": null, "type": "message", "timestamp": 1790000905000, "data": {"role": "assistant", "content": [{"type": "text", "text": "fictional"}], "model": "claude-opus-5-5", "usage": {"input_tokens": 2, "output_tokens": 20, "cache_read_input_tokens": 9000}, "stopReason": "end_turn"}}

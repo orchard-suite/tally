@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- tally ship: posts this Mac's agent usage to tally every minute.
+     `make install-ship` writes it with __LABEL__, __HOME__, __TALLY_URL__, and
+     __SHIP_ROUTE__ filled in. An empty route posts every reply. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>__LABEL__</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/.local/bin/tally</string>
+    <string>ship</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TALLY_URL</key>
+    <string>__TALLY_URL__</string>
+    <key>TALLY_TOKEN_FILE</key>
+    <string>__HOME__/.config/tally/ship-token</string>
+    <key>SHIP_ROUTE</key>
+    <string>__SHIP_ROUTE__</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/tally-ship.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/tally-ship.log</string>
+</dict>
+</plist>

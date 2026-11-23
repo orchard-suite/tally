@@ -1,0 +1,8 @@
+{
+  "backend": "hybrid",
+  "defaultModel": "acme-gateway/claude-sonnet-5-5",
+  "providers": {
+    "acme-gateway": { "baseURL": "https://gateway.example.com", "authHeader": "fictional", "displayName": "Example gateway" },
+    "elsewhere": { "baseURL": "https://api.example.org" }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "tables": [
+    {
+      "name": "PrimaryResult",
+      "columns": [
+        { "name": "day", "type": "string" },
+        { "name": "key", "type": "string" },
+        { "name": "product", "type": "string" },
+        { "name": "model", "type": "string" },
+        { "name": "prompt", "type": "real" },
+        { "name": "cached", "type": "real" },
+        { "name": "created", "type": "real" },
+        { "name": "completion", "type": "real" },
+        { "name": "requests", "type": "real" }
+      ],
+      "rows": [
+        ["2026-11-10", "dev--ada--max", "dev_pro_max", "claude-opus-5-5", 1112, 266137380, 12641055, 232551, 593],
+        ["2026-11-10", "dev--bob--pro", "dev_pro", "gpt-5.6-terra", "1000", 600, 0, 50, 3],
+        ["2026-07-22", "dev--ada--max", "dev_pro_max", "", 31360269, 1355, 0, 0, 0],
+        ["2026-11-11", "app--100--team--svc--purpose", "enterprise_production", "models-discovery", 0, 0, 0, 0, 3937],
+        ["2026-10-12", "dev--bob--pro", "dev_pro", "Claude-Fable-5", 3, 0, 0, 1, 1],
+        ["2026-10-12", "dev--bob--pro", "dev_pro", "claude-fable-5", 2, 0, 18079, 4, 1]
+      ]
+    }
+  ]
+}

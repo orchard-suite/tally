@@ -1,0 +1,176 @@
+{
+ "mem_total": [
+  {
+   "labels": {
+    "host": "vm-big"
+   },
+   "value": 17179869184
+  },
+  {
+   "labels": {
+    "host": "vm-tight"
+   },
+   "value": 4294967296
+  },
+  {
+   "labels": {
+    "host": "vm-fit"
+   },
+   "value": 8589934592
+  },
+  {
+   "labels": {
+    "host": "host-physical"
+   },
+   "value": 68719476736
+  },
+  {
+   "labels": {
+    "host": "node-1"
+   },
+   "value": 17179869184
+  }
+ ],
+ "mem_p95": [
+  {
+   "labels": {
+    "host": "vm-big"
+   },
+   "value": 2147483648
+  },
+  {
+   "labels": {
+    "host": "vm-tight"
+   },
+   "value": 4080218931
+  },
+  {
+   "labels": {
+    "host": "vm-fit"
+   },
+   "value": 5368709120
+  },
+  {
+   "labels": {
+    "host": "host-physical"
+   },
+   "value": 8589934592
+  },
+  {
+   "labels": {
+    "host": "node-1"
+   },
+   "value": 3221225472
+  }
+ ],
+ "cpu_p95": [
+  {
+   "labels": {
+    "host": "vm-big"
+   },
+   "value": 10
+  },
+  {
+   "labels": {
+    "host": "vm-tight"
+   },
+   "value": 95
+  },
+  {
+   "labels": {
+    "host": "vm-fit"
+   },
+   "value": 60
+  },
+  {
+   "labels": {
+    "host": "host-physical"
+   },
+   "value": 5
+  },
+  {
+   "labels": {
+    "host": "node-1"
+   },
+   "value": 10
+  }
+ ],
+ "cores": [
+  {
+   "labels": {
+    "nodename": "vm-big"
+   },
+   "value": 8
+  },
+  {
+   "labels": {
+    "nodename": "vm-fit"
+   },
+   "value": 2
+  },
+  {
+   "labels": {
+    "nodename": "node-1"
+   },
+   "value": 12
+  }
+ ],
+ "mem_peak": [
+  {
+   "labels": {
+    "host": "vm-big"
+   },
+   "value": 2147483648
+  },
+  {
+   "labels": {
+    "host": "vm-tight"
+   },
+   "value": 4080218931
+  },
+  {
+   "labels": {
+    "host": "vm-fit"
+   },
+   "value": 5368709120
+  },
+  {
+   "labels": {
+    "host": "node-1"
+   },
+   "value": 4294967296
+  }
+ ],
+ "requested": [
+  {
+   "labels": {
+    "node": "node-1",
+    "resource": "cpu"
+   },
+   "value": 5.2
+  },
+  {
+   "labels": {
+    "node": "node-1",
+    "resource": "memory"
+   },
+   "value": 7516192768
+  },
+  {
+   "labels": {
+    "node": "node-1",
+    "resource": "cpu",
+    "part": "reserved"
+   },
+   "value": 0.5
+  },
+  {
+   "labels": {
+    "node": "node-1",
+    "resource": "memory",
+    "part": "reserved"
+   },
+   "value": 1073741824
+  }
+ ]
+}

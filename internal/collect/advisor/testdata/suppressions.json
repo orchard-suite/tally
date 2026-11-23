@@ -1,0 +1,3 @@
+{"totalRecords":1,"count":1,"data":[
+ {"id":"/subscriptions/00000000-0000-4000-8000-000000000002/resourceGroups/rg-data/providers/Microsoft.Compute/virtualMachines/VM-DB-07/providers/Microsoft.Advisor/recommendations/A7/suppressions/HardcodedSuppressionName"}
+]}

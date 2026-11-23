@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-11-01T12:00:00Z",
+  "currency": "USD",
+  "total_per_month": 100,
+  "hosts": [
+    {"host": "node-a", "watts": 120, "cost_per_hour": 0.0822, "per_month": 60, "cluster": true},
+    {"host": "nas", "watts": 40, "cost_per_hour": 0.0548, "per_month": 40, "cluster": false}
+  ],
+  "namespaces": [
+    {"namespace": "db", "cpu_request_cores": 2, "memory_request_bytes": 600, "share": 0.55, "per_month": 33},
+    {"namespace": "web", "cpu_request_cores": 2, "memory_request_bytes": 400, "share": 0.45, "per_month": 27},
+    {"namespace": "idle", "cpu_request_cores": 0, "memory_request_bytes": 0, "share": 0, "per_month": 0}
+  ]
+}

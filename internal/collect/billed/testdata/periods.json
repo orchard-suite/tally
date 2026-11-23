@@ -1,0 +1,4 @@
+[
+ {"blueprint":"finops_billing_period","key":"2026-09","title":"2026-09","state":"active","fields":{"period":"2026-09","ai_cents":2928589,"ai_models_cents":2700000,"usage_cents":8463324,"invoice_state":"reconciled","latest":true},"relations":{}},
+ {"blueprint":"finops_billing_period","key":"2026-08","title":"2026-08","state":"active","fields":{"period":"2026-08","ai_cents":3783736,"usage_cents":9373116,"invoice_state":"reconciled","latest":false},"relations":{}}
+]

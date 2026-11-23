@@ -1,0 +1,104 @@
+{
+  "type": "control_response",
+  "response": {
+    "subtype": "success",
+    "request_id": "u1",
+    "response": {
+      "subscription_type": "max",
+      "rate_limits_available": true,
+      "rate_limits": {
+        "five_hour": {
+          "utilization": 3,
+          "resets_at": "2026-10-22T06:19:59.958565+00:00",
+          "limit_dollars": null,
+          "used_dollars": null,
+          "remaining_dollars": null,
+          "locked_reason": null
+        },
+        "seven_day": {
+          "utilization": 61,
+          "resets_at": "2026-10-26T20:59:59.958585+00:00",
+          "limit_dollars": null,
+          "used_dollars": null,
+          "remaining_dollars": null,
+          "locked_reason": null
+        },
+        "seven_day_opus": null,
+        "extra_usage": {
+          "is_enabled": false,
+          "monthly_limit": null,
+          "used_credits": null,
+          "utilization": null,
+          "currency": null,
+          "decimal_places": null,
+          "disabled_reason": null,
+          "user_disabled": true,
+          "spend_limit_reached": false,
+          "credits_ever_enabled": true,
+          "daily": null,
+          "weekly": null
+        },
+        "limits": [
+          {
+            "kind": "session",
+            "group": "session",
+            "percent": 3,
+            "severity": "normal",
+            "resets_at": "2026-10-22T06:19:59.958565+00:00",
+            "scope": null,
+            "is_active": false
+          },
+          {
+            "kind": "weekly_all",
+            "group": "weekly",
+            "percent": 61,
+            "severity": "normal",
+            "resets_at": "2026-10-26T20:59:59.958585+00:00",
+            "scope": null,
+            "is_active": false
+          },
+          {
+            "kind": "weekly_scoped",
+            "group": "weekly",
+            "percent": 88,
+            "severity": "warning",
+            "resets_at": "2026-10-26T20:59:59.958718+00:00",
+            "scope": {
+              "model": {
+                "id": null,
+                "display_name": "Fable"
+              },
+              "surface": null
+            },
+            "is_active": true
+          }
+        ],
+        "spend": {
+          "used": {
+            "amount_minor": 0,
+            "currency": "USD",
+            "exponent": 2
+          },
+          "limit": null,
+          "percent": 0,
+          "severity": "normal",
+          "enabled": false,
+          "disabled_reason": null,
+          "cap": null,
+          "balance": null,
+          "auto_reload": null,
+          "disclaimer": "Usage credits cover you when you hit your plan limits. [Learn more](https://support.claude.com/articles/12429409)",
+          "can_purchase_credits": false,
+          "can_toggle": false
+        },
+        "model_scoped": [
+          {
+            "display_name": "Fable",
+            "utilization": 88,
+            "resets_at": "2026-10-26T20:59:59.958718+00:00"
+          }
+        ]
+      }
+    }
+  }
+}

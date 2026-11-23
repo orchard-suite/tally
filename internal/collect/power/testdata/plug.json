@@ -1,0 +1,1 @@
+{"entity_id":"sensor.rack_plug_power","state":"142.6","attributes":{"state_class":"measurement","unit_of_measurement":"W","device_class":"power","friendly_name":"Rack plug Power"},"last_changed":"2026-10-31T22:00:00.000000+00:00","last_updated":"2026-10-31T22:00:00.000000+00:00"}

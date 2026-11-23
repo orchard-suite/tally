@@ -1,0 +1,439 @@
+{
+ "pods": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "portal",
+    "workload_type": "deployment"
+   },
+   "value": 2
+  },
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment"
+   },
+   "value": 1
+  },
+  {
+   "labels": {
+    "namespace": "idle",
+    "workload": "nothing",
+    "workload_type": "deployment"
+   },
+   "value": 1
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "kube-proxy-node1",
+    "workload_type": "staticpod"
+   },
+   "value": 1
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "coredns",
+    "workload_type": "deployment"
+   },
+   "value": 2
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-xyz34",
+    "workload_type": "EphemeralRunner"
+   },
+   "value": 1
+  }
+ ],
+ "cronjobs": [
+  {
+   "labels": {
+    "namespace": "batch",
+    "cronjob": "nightly"
+   },
+   "value": 1
+  }
+ ],
+ "job_owners": [
+  {
+   "labels": {
+    "namespace": "batch",
+    "job_name": "nightly-29900000",
+    "owner_name": "nightly"
+   },
+   "value": 1
+  },
+  {
+   "labels": {
+    "namespace": "batch",
+    "job_name": "retired-29800000",
+    "owner_name": "retired"
+   },
+   "value": 1
+  }
+ ],
+ "allocatable": [
+  {
+   "labels": {
+    "resource": "cpu"
+   },
+   "value": 16
+  },
+  {
+   "labels": {
+    "resource": "memory"
+   },
+   "value": 68719476736
+  }
+ ],
+ "cpu_p95": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "portal",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 0.05
+  },
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 0.15
+  },
+  {
+   "labels": {
+    "namespace": "batch",
+    "workload": "nightly-29900000",
+    "workload_type": "job",
+    "container": "run"
+   },
+   "value": 0.2
+  },
+  {
+   "labels": {
+    "namespace": "batch",
+    "workload": "retired-29800000",
+    "workload_type": "job",
+    "container": "run"
+   },
+   "value": 0.3
+  },
+  {
+   "labels": {
+    "namespace": "batch",
+    "workload": "oneoff",
+    "workload_type": "job",
+    "container": "run"
+   },
+   "value": 0.4
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-abc12",
+    "workload_type": "EphemeralRunner",
+    "container": "runner"
+   },
+   "value": 1.2
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-xyz34",
+    "workload_type": "EphemeralRunner",
+    "container": "runner"
+   },
+   "value": 0.6
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "kube-proxy-node1",
+    "workload_type": "staticpod",
+    "container": "kube-proxy"
+   },
+   "value": 0.005
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "coredns",
+    "workload_type": "deployment",
+    "container": "coredns"
+   },
+   "value": 0.01
+  },
+  {
+   "labels": {
+    "namespace": "gone",
+    "workload": "ghost",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 0.5
+  },
+  {
+   "labels": {
+    "namespace": "idle",
+    "workload": "nothing",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 0
+  }
+ ],
+ "cpu_peak": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 0.2
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-abc12",
+    "workload_type": "EphemeralRunner",
+    "container": "runner"
+   },
+   "value": 2.5
+  }
+ ],
+ "memory_p95": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "portal",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 94371840
+  }
+ ],
+ "memory_peak": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "portal",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 104857600
+  },
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 262144000
+  },
+  {
+   "labels": {
+    "namespace": "batch",
+    "workload": "nightly-29900000",
+    "workload_type": "job",
+    "container": "run"
+   },
+   "value": 41943040
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-abc12",
+    "workload_type": "EphemeralRunner",
+    "container": "runner"
+   },
+   "value": 314572800
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-xyz34",
+    "workload_type": "EphemeralRunner",
+    "container": "runner"
+   },
+   "value": 734003200
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "kube-proxy-node1",
+    "workload_type": "staticpod",
+    "container": "kube-proxy"
+   },
+   "value": 20971520
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "coredns",
+    "workload_type": "deployment",
+    "container": "coredns"
+   },
+   "value": 31457280
+  }
+ ],
+ "cpu_request": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "portal",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 0.5
+  },
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 0.1
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "kube-proxy-node1",
+    "workload_type": "staticpod",
+    "container": "kube-proxy"
+   },
+   "value": 0.25
+  },
+  {
+   "labels": {
+    "namespace": "kube-system",
+    "workload": "coredns",
+    "workload_type": "deployment",
+    "container": "coredns"
+   },
+   "value": 0.1
+  },
+  {
+   "labels": {
+    "namespace": "idle",
+    "workload": "nothing",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 0.1
+  }
+ ],
+ "memory_request": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "portal",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 536870912
+  },
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 134217728
+  },
+  {
+   "labels": {
+    "namespace": "idle",
+    "workload": "nothing",
+    "workload_type": "deployment",
+    "container": "app"
+   },
+   "value": 67108864
+  }
+ ],
+ "cpu_limit": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 0.2
+  }
+ ],
+ "memory_limit": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 268435456
+  }
+ ],
+ "memory_kills": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 3
+  }
+ ],
+ "cpu_periods": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 10000
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-abc12",
+    "workload_type": "EphemeralRunner",
+    "container": "init-externals"
+   },
+   "value": 100
+  }
+ ],
+ "cpu_throttled": [
+  {
+   "labels": {
+    "namespace": "web",
+    "workload": "api",
+    "workload_type": "deployment",
+    "container": "api"
+   },
+   "value": 5000
+  },
+  {
+   "labels": {
+    "namespace": "ci",
+    "workload": "repo-a-runner-abc12",
+    "workload_type": "EphemeralRunner",
+    "container": "init-externals"
+   },
+   "value": 90
+  }
+ ]
+}

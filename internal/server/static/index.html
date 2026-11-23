@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>tally</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%235b4bd6%27/%3E%3C/svg%3E">
+<!-- Added to a Home Screen or installed on a desktop, the board opens as its own app. -->
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0f11" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tally">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=Instrument+Serif&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<script src="https://unpkg.com/@grafana/faro-web-sdk@1.19.0/dist/bundle/faro-web-sdk.iife.js" crossorigin="anonymous" defer></script>
+<script src="https://unpkg.com/@grafana/faro-web-tracing@1.19.0/dist/bundle/faro-web-tracing.iife.js" crossorigin="anonymous" defer></script>
+<script src="/static/app.js" defer></script>
+<script src="/static/estate.js" defer></script>
+<script src="/static/agents.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail" aria-label="tally">
+    <a class="brand" href="#estate"><span class="mark" aria-hidden="true"></span><span class="brand-name">tally</span></a>
+    <nav class="views" aria-label="Views">
+      <a href="#estate" id="tab-estate">Statement</a>
+      <a href="#agents" id="tab-agents">Agent work</a>
+    </nav>
+    <nav class="index" id="index" aria-label="Sections"></nav>
+    <details class="jump" id="jump"><summary title="Sections"><span class="sr">Sections</span></summary><nav id="jump-list" aria-label="Sections"></nav></details>
+    <div class="asof"><span id="asof"></span><span id="version"></span><a href="/v1/costs">JSON</a></div>
+  </aside>
+
+  <main id="view-estate" class="doc" aria-live="polite"></main>
+  <main id="view-agents" class="doc" hidden></main>
+</div>
+</body>
+</html>

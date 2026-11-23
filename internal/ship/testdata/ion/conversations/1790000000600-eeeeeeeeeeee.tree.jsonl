@@ -1,0 +1,2 @@
+{"id": "1790000000600-eeeeeeeeeeee", "meta": true, "version": 2, "dispatchTranscriptMirror": true}
+{"id": "m1", "parentId": null, "type": "message", "timestamp": 1790000009000, "data": {"role": "assistant", "content": [{"type": "text", "text": "fictional"}], "model": "claude-sonnet-5-5"}}
