@@ -1,5 +1,5 @@
 # What this repository builds: its service, the APIs it provides, and the
-# APIs it calls. redgreen, the forge reader, reads this file for every estate
+# APIs it calls. Muster, the forge reader, reads this file for every estate
 # that reads this repository and writes the service and its APIs into that
 # estate's Orrery. `fields` and `relations` place it in an estate's platform
 # pillars (plat_pillar); an API key is the providing service's key and its id.
