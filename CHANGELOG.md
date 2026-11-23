@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0](https://github.com/orchard-suite/tally/compare/v1.0.0...v1.1.0) (2026-11-23)
+
+### Features
+
+* **tally:** pin a build account from the cli ([b8cbf21](https://github.com/orchard-suite/tally/commit/b8cbf212635ff45f85e31b5de8ba196d18d9d557))
+
 ## [1.0.0](https://github.com/orchard-suite/tally/compare/v0.0.47...v1.0.0) (2026-11-23)
 
 ### ⚠ BREAKING CHANGES
