@@ -255,7 +255,11 @@ Every collector runs on its own interval (`K8S_INTERVAL` 15m,
 `USAGE_PROBE_EVERY` 3m, `AGENTS_INTERVAL` 5m) and counts every round in `tally.collector.run` by
 `collector` and `outcome`, with `tally.collector.last_success` in unix
 seconds and `tally.collector.interval`, its interval in seconds, both by
-`collector`, so an alert can say "no good round in two intervals". Every paid or rate-limited upstream is counted in
+`collector`, so an alert can say "no good round in two intervals". A failed
+round is tried again sooner than its interval: after 15 minutes or a quarter
+of the interval, whichever is shorter, doubling on each failure in a row up
+to half the interval, and back to the interval after a round that works.
+Each retry is logged as `collector retry scheduled` with its wait. Every paid or rate-limited upstream is counted in
 `tally.upstream.requests` by `upstream` and `outcome` (`ok`, `refused`,
 `failed`).
 

@@ -16,8 +16,9 @@ https://github.com/orchard-suite/hedge/blob/main/docs/fixtures.md.
   `Collector` interface, the runner that
   counts `tally.collector.run` by collector and outcome, and the budget
   counter `tally.upstream.requests` for every paid or rate-limited upstream.
-  `collect.Every` runs a round on an interval as a root span. Every
-  collector names its `Interval`, exported as `tally.collector.interval`.
+  `collect.Every` runs a round on an interval as a root span, and tries a
+  failed round again sooner (`collect.Retry`). Every collector names its
+  `Interval`, exported as `tally.collector.interval`.
 - `internal/collect/<name>` is one collector each. Every one turns on from
   its own environment variables and is off without them. Each keeps its
   last snapshot and exports it as `tally.<name>.*` observable gauges:

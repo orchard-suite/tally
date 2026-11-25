@@ -163,37 +163,68 @@ func (i *Instruments) Start(ctx context.Context, log *slog.Logger, collectors []
 	}
 }
 
-// Every runs round now and then on every tick of interval until ctx ends.
-// Each round is a root span of its own, so its log lines carry a trace id,
-// and a round has at most the interval to finish.
+// Every runs round now and then once every interval until ctx ends. A
+// failed round is tried again sooner, after Retry's wait, and the cadence
+// returns to the interval after the next round that works. Each round is a
+// root span of its own, so its log lines carry a trace id, and a round has
+// at most the interval to finish.
 func Every(ctx context.Context, name string, interval time.Duration, log *slog.Logger, done func(ok bool), round func(ctx context.Context) error) error {
 	tracer := otel.Tracer(Service)
-	run := func() {
+	run := func() error {
 		rctx, span := tracer.Start(ctx, "collect "+name, trace.WithNewRoot(), trace.WithAttributes(attribute.String("task", name)))
+		defer span.End()
 		rctx, cancel := context.WithTimeout(rctx, interval)
+		defer cancel()
 		started := time.Now()
 		err := round(rctx)
-		cancel()
 		if err != nil {
 			span.RecordError(err)
 			log.ErrorContext(rctx, "collector round failed", "collector", name, "error", err, "took_ms", time.Since(started).Milliseconds())
 		} else {
 			log.InfoContext(rctx, "collector round done", "collector", name, "took_ms", time.Since(started).Milliseconds())
 		}
-		span.End()
 		done(err == nil)
+		return err
 	}
-	run()
-	t := time.NewTicker(interval)
-	defer t.Stop()
+	failures := 0
 	for {
+		started := time.Now()
+		wait := interval
+		if err := run(); err != nil {
+			failures++
+			wait = Retry(interval, failures)
+			log.WarnContext(ctx, "collector retry scheduled", "collector", name, "failures", failures, "wait", wait.String(), "wait_s", int64(wait/time.Second))
+		} else {
+			failures = 0
+			wait -= time.Since(started)
+		}
+		t := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return nil
 		case <-t.C:
-			run()
 		}
 	}
+}
+
+// FirstRetry is the longest a collector waits to try a failed round again
+// the first time. Cost Management, the strictest upstream, allows a few
+// calls a minute per scope, so this leaves its budget room to recover.
+const FirstRetry = 15 * time.Minute
+
+// Retry is how long to wait after the given number of failed rounds in a
+// row: the first wait is FirstRetry or a quarter of the interval, whichever
+// is shorter, and each failure after it doubles the wait, up to half the
+// interval, so a failing collector still tries more often than one that
+// works.
+func Retry(interval time.Duration, failures int) time.Duration {
+	wait := min(FirstRetry, interval/4)
+	ceiling := interval / 2
+	for n := 1; n < failures && wait < ceiling; n++ {
+		wait *= 2
+	}
+	return min(wait, ceiling)
 }
 
 // Zone is where tally's days and months begin: TIMEZONE, an IANA zone such
