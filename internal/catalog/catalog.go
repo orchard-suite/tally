@@ -151,6 +151,9 @@ func New(hub *orrery.Client, log *slog.Logger, inst *collect.Instruments, source
 
 func (w *Writer) Name() string { return "catalog" }
 
+// Interval is how often a round runs when the last one worked.
+func (w *Writer) Interval() time.Duration { return w.interval }
+
 // Run waits for the inputs' first rounds, then writes every interval.
 func (w *Writer) Run(ctx context.Context, done func(ok bool)) error {
 	t := time.NewTicker(5 * time.Second)

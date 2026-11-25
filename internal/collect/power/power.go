@@ -199,6 +199,9 @@ func Price(s string) (float64, error) {
 
 func (c *Collector) Name() string { return "power" }
 
+// Interval is how often a round runs when the last one worked.
+func (c *Collector) Interval() time.Duration { return c.interval }
+
 // Latest is the last round's hosts, or nil before the first.
 func (c *Collector) Latest() *Snapshot { return c.latest.Load() }
 

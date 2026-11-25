@@ -185,6 +185,9 @@ func UsesFromEnv(log *slog.Logger, inst *collect.Instruments, a *agents.Collecto
 
 func (w *UsesWriter) Name() string { return "uses" }
 
+// Interval is how often a round runs when the last one worked.
+func (w *UsesWriter) Interval() time.Duration { return w.interval }
+
 // Run writes every interval.
 func (w *UsesWriter) Run(ctx context.Context, done func(ok bool)) error {
 	return collect.Every(ctx, w.Name(), w.interval, w.log, done, w.Round)

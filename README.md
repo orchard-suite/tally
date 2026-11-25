@@ -254,7 +254,8 @@ Every collector runs on its own interval (`K8S_INTERVAL` 15m,
 `ADVISOR_INTERVAL` 6h, `AI_INTERVAL` 1h,
 `USAGE_PROBE_EVERY` 3m, `AGENTS_INTERVAL` 5m) and counts every round in `tally.collector.run` by
 `collector` and `outcome`, with `tally.collector.last_success` in unix
-seconds. Every paid or rate-limited upstream is counted in
+seconds and `tally.collector.interval`, its interval in seconds, both by
+`collector`, so an alert can say "no good round in two intervals". Every paid or rate-limited upstream is counted in
 `tally.upstream.requests` by `upstream` and `outcome` (`ok`, `refused`,
 `failed`).
 

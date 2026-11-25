@@ -48,6 +48,15 @@ func EnsureHome() error {
 	return nil
 }
 
+// Every is how often serve reads the accounts, from USAGE_PROBE_EVERY.
+func Every() (time.Duration, error) {
+	every, err := time.ParseDuration(env("USAGE_PROBE_EVERY", "3m"))
+	if err != nil {
+		return 0, fmt.Errorf("USAGE_PROBE_EVERY: %w", err)
+	}
+	return every, nil
+}
+
 // Serve, Check, Login, and Logout are usage-probe's commands.
 func Serve(ctx context.Context, root string, done func(ok bool)) error {
 	return serve(ctx, root, done)
@@ -69,9 +78,9 @@ func serve(ctx context.Context, root string, done func(ok bool)) error {
 	if endpoint == "" {
 		return errors.New("set USAGE_PROBE_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT to the OTLP endpoint the limits are pushed to")
 	}
-	every, err := time.ParseDuration(env("USAGE_PROBE_EVERY", "3m"))
+	every, err := Every()
 	if err != nil {
-		return fmt.Errorf("USAGE_PROBE_EVERY: %w", err)
+		return err
 	}
 	rot, err := newRotator()
 	if err != nil {

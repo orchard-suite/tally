@@ -169,6 +169,9 @@ func FromEnv(log *slog.Logger, inst *collect.Instruments, agents Enroller) (*Col
 
 func (c *Collector) Name() string { return "intune" }
 
+// Interval is how often a round runs when the last one worked.
+func (c *Collector) Interval() time.Duration { return c.interval }
+
 // Run reads every interval.
 func (c *Collector) Run(ctx context.Context, done func(ok bool)) error {
 	return collect.Every(ctx, c.Name(), c.interval, c.log, done, c.Round)

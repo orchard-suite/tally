@@ -2,6 +2,7 @@ package subscriptions
 
 import (
 	"context"
+	"time"
 )
 
 // Collector runs usage-probe's serve loop as one of tally's collectors. The
@@ -20,6 +21,13 @@ func FromEnv() *Collector {
 }
 
 func (c *Collector) Name() string { return "subscriptions" }
+
+// Interval is how often a round runs. A setting serve cannot read reads as
+// zero, and serve stops on it.
+func (c *Collector) Interval() time.Duration {
+	every, _ := Every()
+	return every
+}
 
 func (c *Collector) Run(ctx context.Context, done func(ok bool)) error {
 	return Serve(ctx, c.root, done)

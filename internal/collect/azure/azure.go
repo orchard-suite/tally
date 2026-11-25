@@ -345,6 +345,9 @@ func ParseSubscriptions(raw []byte) ([]string, error) {
 
 func (c *Collector) Name() string { return "azure" }
 
+// Interval is how often a round runs when the last one worked.
+func (c *Collector) Interval() time.Duration { return c.interval }
+
 // Latest is the last round's costs, or nil before the first.
 func (c *Collector) Latest() *Snapshot { return c.latest.Load() }
 

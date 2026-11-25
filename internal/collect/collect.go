@@ -28,8 +28,10 @@ func Meter() metric.Meter {
 
 // Collector gathers one source's numbers on its own schedule. Run collects
 // until ctx ends and calls done after every round with whether it worked.
+// Interval is how often a round runs while rounds work.
 type Collector interface {
 	Name() string
+	Interval() time.Duration
 	Run(ctx context.Context, done func(ok bool)) error
 }
 
@@ -40,8 +42,9 @@ type Instruments struct {
 	lastSuccess metric.Int64Gauge
 	upstream    metric.Int64Counter
 
-	mu     sync.Mutex
-	status map[string]*Status
+	mu        sync.Mutex
+	status    map[string]*Status
+	intervals map[string]time.Duration
 }
 
 // Status is where one collector stands, for the board.
@@ -80,7 +83,7 @@ func (i *Instruments) note(name string, ok bool) {
 }
 
 // NewInstruments registers tally.collector.run, tally.collector.last_success,
-// and tally.upstream.requests.
+// tally.collector.interval, and tally.upstream.requests.
 func NewInstruments() (*Instruments, error) {
 	m := Meter()
 	runs, err := m.Int64Counter("tally.collector.run", metric.WithDescription("Collector rounds, by collector and outcome (ok or failed)."))
@@ -95,7 +98,29 @@ func NewInstruments() (*Instruments, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Instruments{runs: runs, lastSuccess: last, upstream: up, status: map[string]*Status{}}, nil
+	i := &Instruments{runs: runs, lastSuccess: last, upstream: up, status: map[string]*Status{}, intervals: map[string]time.Duration{}}
+	if _, err := m.Int64ObservableGauge("tally.collector.interval", metric.WithUnit("s"),
+		metric.WithDescription("How often the collector runs a round while its rounds work, in seconds."),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			for name, every := range i.Intervals() {
+				o.Observe(int64(every/time.Second), metric.WithAttributes(attribute.String("collector", name)))
+			}
+			return nil
+		})); err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
+// Intervals is every running collector's interval, by name.
+func (i *Instruments) Intervals() map[string]time.Duration {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	out := make(map[string]time.Duration, len(i.intervals))
+	for name, every := range i.intervals {
+		out[name] = every
+	}
+	return out
 }
 
 // Upstream outcomes.
@@ -116,6 +141,7 @@ func (i *Instruments) Start(ctx context.Context, log *slog.Logger, collectors []
 	for _, c := range collectors {
 		i.mu.Lock()
 		i.status[c.Name()] = &Status{Name: c.Name()}
+		i.intervals[c.Name()] = c.Interval()
 		i.mu.Unlock()
 		go func() {
 			name := attribute.String("collector", c.Name())

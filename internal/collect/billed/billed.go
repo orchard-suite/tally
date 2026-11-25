@@ -160,6 +160,9 @@ func FromEnv(log *slog.Logger, inst *collect.Instruments) (*Collector, error) {
 // Name is the collector's name.
 func (c *Collector) Name() string { return "billed" }
 
+// Interval is how often a round runs when the last one worked.
+func (c *Collector) Interval() time.Duration { return c.interval }
+
 // Latest is the last round's months, nil before the first round worked.
 func (c *Collector) Latest() *Snapshot { return c.latest.Load() }
 

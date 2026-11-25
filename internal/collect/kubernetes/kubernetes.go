@@ -523,6 +523,9 @@ func FromEnv(log *slog.Logger, inst *collect.Instruments) (*Collector, error) {
 
 func (c *Collector) Name() string { return "kubernetes" }
 
+// Interval is how often a round runs when the last one worked.
+func (c *Collector) Interval() time.Duration { return c.interval }
+
 // Latest is the last round's workloads, or nil before the first.
 func (c *Collector) Latest() *Snapshot { return c.latest.Load() }
 

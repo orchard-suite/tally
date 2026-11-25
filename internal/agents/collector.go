@@ -196,6 +196,9 @@ func ParseOwners(s string) (map[string]string, error) {
 // Name is the collector's name.
 func (c *Collector) Name() string { return "agents" }
 
+// Interval is how often a round runs when the last one worked.
+func (c *Collector) Interval() time.Duration { return c.every }
+
 // Store is the agent store, for the board.
 func (c *Collector) Store() *Store { return c.store }
 

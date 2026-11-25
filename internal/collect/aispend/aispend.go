@@ -312,6 +312,9 @@ func name(key, fallback string) string {
 
 func (c *Collector) Name() string { return "ai" }
 
+// Interval is how often a round runs when the last one worked.
+func (c *Collector) Interval() time.Duration { return c.interval }
+
 // Latest is the last round's accounts; the prices are there before the first.
 func (c *Collector) Latest() *Snapshot {
 	snap := c.latest.Load()
