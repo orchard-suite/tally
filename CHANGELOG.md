@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0](https://github.com/orchard-suite/tally/compare/v1.2.0...v1.3.0) (2026-11-25)
+
+### Features
+
+* **tally:** export each collector's interval ([901f642](https://github.com/orchard-suite/tally/commit/901f6423349d466da2c5bcefd21820ac06f7a306))
+
+### Bug Fixes
+
+* **tally:** retry a failed collector round sooner ([224a99c](https://github.com/orchard-suite/tally/commit/224a99c195ad46a4990b491db055d42443a8cb24))
+
 ## [1.2.0](https://github.com/orchard-suite/tally/compare/v1.1.0...v1.2.0) (2026-11-23)
 
 ### Features
