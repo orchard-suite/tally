@@ -160,6 +160,29 @@ paths:
         "401": { $ref: "#/components/responses/SignedOut" }
         "403": { $ref: "#/components/responses/NotYours" }
         "502": { $ref: "#/components/responses/PoolsUnread" }
+  /v1/machine/pools:
+    get:
+      operationId: listMachinePools
+      tags: [usage]
+      summary: The subscription pools, for a machine
+      description: |
+        The pools of GET /v1/pools, for an app on a machine that shows the
+        machine's shipping token, so it can tell how much of the
+        subscriptions its agents draw on is left and when it refills.
+        Answered on the API port. Only served when the agents collector
+        is on.
+      security:
+        - shipToken: []
+      responses:
+        "200":
+          description: The pools.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Pool" }
+        "401": { $ref: "#/components/responses/UnknownToken" }
+        "502": { $ref: "#/components/responses/PoolsUnread" }
   /v1/gateway/keys:
     get:
       operationId: listGatewayKeys

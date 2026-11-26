@@ -20,7 +20,7 @@ func TestAnEnrolledMachinePostsUnderItsName(t *testing.T) {
 	}
 	req, _ := http.NewRequest(http.MethodPost, "/", nil)
 	req.Header.Set("Authorization", "Bearer secret")
-	if m := c.machine(req); m != "laptop" {
+	if m := c.Machine(req); m != "laptop" {
 		t.Errorf("a machine SHIP_TOKENS names keeps its name: %q", m)
 	}
 	c.Enroll(map[string]string{})

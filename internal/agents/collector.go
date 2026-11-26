@@ -402,8 +402,8 @@ func (c *Collector) register() error {
 // maxBody is the largest post a shipper may send.
 const maxBody = 8 << 20
 
-// machine is the machine r's bearer token names, or empty.
-func (c *Collector) machine(r *http.Request) string {
+// Machine is the machine r's bearer token names, or empty.
+func (c *Collector) Machine(r *http.Request) string {
 	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok {
 		return ""
@@ -430,7 +430,7 @@ func (c *Collector) Enroll(byHash map[string]string) {
 // bearer token names.
 func (c *Collector) Ingest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	machine := c.machine(r)
+	machine := c.Machine(r)
 	if machine == "" {
 		c.log.WarnContext(ctx, "usage post refused", "reason", "no token or an unknown token")
 		c.batches.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", collect.Refused)))
@@ -463,7 +463,7 @@ func (c *Collector) Ingest(w http.ResponseWriter, r *http.Request) {
 // start. A machine withdraws only its own.
 func (c *Collector) Withdraw(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	machine := c.machine(r)
+	machine := c.Machine(r)
 	if machine == "" {
 		c.log.WarnContext(ctx, "usage withdrawal refused", "reason", "no token or an unknown token")
 		http.Error(w, "unknown token", http.StatusUnauthorized)

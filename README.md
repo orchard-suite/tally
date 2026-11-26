@@ -143,7 +143,9 @@ Below it, each provider's subscription pool: every account's weekly (or
 monthly) limit added up, each account 100%, recorded from the
 `subscriptions` collector's metrics in Prometheus and projected seven days
 ahead at the last three hours' burn, with each account refilling at its
-reset. `GET /v1/pools` is the same as JSON.
+reset. `GET /v1/pools` is the same as JSON. An app on a machine reads it
+from the API port as `GET /v1/machine/pools`, with the machine's shipping
+token, to know how much of what its agents draw on is left.
 
 ```bash
 make install-ship TALLY_URL=https://tally.example.com   # this Mac: build into ~/.local/bin, (re)start the launch agent tally.ship (SHIP_LABEL)

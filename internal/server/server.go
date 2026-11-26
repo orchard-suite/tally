@@ -161,8 +161,8 @@ func (s *Server) Session() http.Handler {
 	return telemetry.Handler(mux, "session")
 }
 
-// API is the machine port: the health check, and shippers' posts, each
-// let in by its own bearer token.
+// API is the machine port: the health check, shippers' posts, and the
+// pools a machine's agents draw on, each let in by its own bearer token.
 func (s *Server) API() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -171,6 +171,7 @@ func (s *Server) API() http.Handler {
 	if s.cfg.Agents != nil {
 		mux.HandleFunc("POST /v1/usage", s.cfg.Agents.Ingest)
 		mux.HandleFunc("DELETE /v1/usage", s.cfg.Agents.Withdraw)
+		mux.HandleFunc("GET /v1/machine/pools", s.machinePools)
 	}
 	return telemetry.Handler(mux, "api")
 }
@@ -399,6 +400,20 @@ func (s *Server) pools(w http.ResponseWriter, r *http.Request) {
 		s.poolsAt, s.poolsData = time.Now(), p
 	}
 	writeJSON(w, s.poolsData)
+}
+
+// machinePools is GET /v1/machine/pools: the pools of GET /v1/pools, for
+// a machine that shows its shipping token, so an app on it can tell how
+// much of the subscriptions its agents draw on is left.
+func (s *Server) machinePools(w http.ResponseWriter, r *http.Request) {
+	machine := s.cfg.Agents.Machine(r)
+	if machine == "" {
+		s.log.WarnContext(r.Context(), "machine pools refused", "reason", "no token or an unknown token")
+		http.Error(w, "unknown token", http.StatusUnauthorized)
+		return
+	}
+	s.log.InfoContext(r.Context(), "machine pools let in", "machine", machine)
+	s.pools(w, r)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

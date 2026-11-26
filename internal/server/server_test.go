@@ -241,3 +241,48 @@ func TestGatewayKeysAreTheDetailTiers(t *testing.T) {
 		t.Fatalf("an admin sees keys too: %d", code)
 	}
 }
+
+func TestAMachineReadsThePoolsByItsToken(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	inst, err := collect.NewInstruments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte("secret"))
+	t.Setenv("AGENTS_DB", filepath.Join(t.TempDir(), "agents.db"))
+	t.Setenv("SHIP_TOKENS", "laptop="+hex.EncodeToString(sum[:]))
+	ag, err := agents.FromEnv(log, inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay, _ := faro.NewRelay(faro.Config{Service: collect.Service, Version: "test"}, log)
+	s, err := New(Config{Role: "Viewer", Agents: ag}, estate.Sources{}, inst, relay, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := httptest.NewServer(s.API())
+	defer api.Close()
+	get := func(token string) (int, string) {
+		req, _ := http.NewRequest(http.MethodGet, api.URL+"/v1/machine/pools", nil)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, strings.TrimSpace(string(b))
+	}
+	if code, _ := get(""); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+	if code, _ := get("wrong"); code != http.StatusUnauthorized {
+		t.Fatalf("an unknown token: %d", code)
+	}
+	// With no Prometheus there are no pools, and the answer says so.
+	if code, body := get("secret"); code != http.StatusOK || body != "[]" {
+		t.Fatalf("the machine's token: %d %q", code, body)
+	}
+}
