@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0](https://github.com/orchard-suite/tally/compare/v1.3.0...v1.4.0) (2026-11-26)
+
+### Features
+
+* **tally:** let a machine read the pools by token ([22d388f](https://github.com/orchard-suite/tally/commit/22d388f4efe3af2ff74f8cff0d3d5336e13e2e34))
+
 ## [1.3.0](https://github.com/orchard-suite/tally/compare/v1.2.0...v1.3.0) (2026-11-25)
 
 ### Features
