@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0](https://github.com/orchard-suite/tally/compare/v1.4.0...v1.5.0) (2026-11-26)
+
+### Features
+
+* **tally:** answer a machine's headroom ([3e725cf](https://github.com/orchard-suite/tally/commit/3e725cfa4b085bf9e08eabef6c764e5bcaa54114))
+
 ## [1.4.0](https://github.com/orchard-suite/tally/compare/v1.3.0...v1.4.0) (2026-11-26)
 
 ### Features
