@@ -129,8 +129,10 @@ https://github.com/orchard-suite/hedge/blob/main/docs/fixtures.md.
   and `X-Forwarded-Groups`, so only Traefik may reach it. The API port
   (8081) is `/healthz`, `POST /v1/usage`, `DELETE /v1/usage`, by
   which a shipper withdraws all its machine posted, and
-  `GET /v1/machine/pools`, the pools for an app on a machine; all three
-  trust only a shipper's bearer token. What of agent work a person sees is
+  `GET /v1/machine/headroom`, what an app on a machine can draw on
+  (`pool.Machine`: the rotation, the pools that apply to its models, and
+  one number for how close it is to nothing); all three trust only a
+  shipper's bearer token. What of agent work a person sees is
   `Report.Limit`: spend by user needs `DETAIL_ROLE`, the work and its
   conversations need `ADMIN_ROLE`, and everyone else gets totals and
   models. A new view of agent data decides which tier it belongs to.

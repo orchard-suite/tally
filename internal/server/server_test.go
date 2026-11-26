@@ -19,6 +19,7 @@ import (
 	"github.com/orchard-suite/tally/internal/collect"
 	"github.com/orchard-suite/tally/internal/collect/gateway"
 	"github.com/orchard-suite/tally/internal/estate"
+	"github.com/orchard-suite/tally/internal/pool"
 )
 
 func newServer(t *testing.T, role string) *Server {
@@ -242,7 +243,7 @@ func TestGatewayKeysAreTheDetailTiers(t *testing.T) {
 	}
 }
 
-func TestAMachineReadsThePoolsByItsToken(t *testing.T) {
+func TestAMachineReadsItsHeadroomByItsToken(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	inst, err := collect.NewInstruments()
 	if err != nil {
@@ -262,8 +263,8 @@ func TestAMachineReadsThePoolsByItsToken(t *testing.T) {
 	}
 	api := httptest.NewServer(s.API())
 	defer api.Close()
-	get := func(token string) (int, string) {
-		req, _ := http.NewRequest(http.MethodGet, api.URL+"/v1/machine/pools", nil)
+	get := func(token string) (int, []byte) {
+		req, _ := http.NewRequest(http.MethodGet, api.URL+"/v1/machine/headroom?model=opus", nil)
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -273,7 +274,7 @@ func TestAMachineReadsThePoolsByItsToken(t *testing.T) {
 		}
 		defer res.Body.Close()
 		b, _ := io.ReadAll(res.Body)
-		return res.StatusCode, strings.TrimSpace(string(b))
+		return res.StatusCode, b
 	}
 	if code, _ := get(""); code != http.StatusUnauthorized {
 		t.Fatalf("no token: %d", code)
@@ -281,8 +282,13 @@ func TestAMachineReadsThePoolsByItsToken(t *testing.T) {
 	if code, _ := get("wrong"); code != http.StatusUnauthorized {
 		t.Fatalf("an unknown token: %d", code)
 	}
-	// With no Prometheus there are no pools, and the answer says so.
-	if code, body := get("secret"); code != http.StatusOK || body != "[]" {
-		t.Fatalf("the machine's token: %d %q", code, body)
+	// With no Prometheus nothing is read, and the answer says so.
+	code, body := get("secret")
+	var h pool.Headroom
+	if err := json.Unmarshal(body, &h); err != nil || code != http.StatusOK {
+		t.Fatalf("the machine's token: %d %s", code, body)
+	}
+	if h.Provider != "claude" || !h.Usable || h.Used != 0 || h.Binding != "no limit read" {
+		t.Fatalf("nothing read: %+v", h)
 	}
 }

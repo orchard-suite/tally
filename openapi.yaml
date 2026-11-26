@@ -160,27 +160,42 @@ paths:
         "401": { $ref: "#/components/responses/SignedOut" }
         "403": { $ref: "#/components/responses/NotYours" }
         "502": { $ref: "#/components/responses/PoolsUnread" }
-  /v1/machine/pools:
+  /v1/machine/headroom:
     get:
-      operationId: listMachinePools
+      operationId: getMachineHeadroom
       tags: [usage]
-      summary: The subscription pools, for a machine
+      summary: What a machine's agents can draw on
       description: |
-        The pools of GET /v1/pools, for an app on a machine that shows the
-        machine's shipping token, so it can tell how much of the
-        subscriptions its agents draw on is left and when it refills.
-        Answered on the API port. Only served when the agents collector
-        is on.
+        For an app on a machine that shows the machine's shipping token:
+        whether an account of the provider can run now, how close the
+        machine is to having nothing for the models its agents run, and
+        every limit that applies. Used is 1 while no build account can
+        run, else the tightest pool that applies; a model's own pool
+        applies only when a named model runs it. The account in use is
+        listed, but its own limits do not bind, because the rotation steps
+        past a spent account. Answered on the API port. Only served when
+        the agents collector is on.
       security:
         - shipToken: []
+      parameters:
+        - name: provider
+          in: query
+          description: The provider, such as claude. Claude when left out.
+          schema: { type: string }
+        - name: model
+          in: query
+          description: A model the machine's agents run, such as opus. Repeat it for each.
+          schema:
+            type: array
+            items: { type: string }
+          style: form
+          explode: true
       responses:
         "200":
-          description: The pools.
+          description: The headroom.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Pool" }
+              schema: { $ref: "#/components/schemas/Headroom" }
         "401": { $ref: "#/components/responses/UnknownToken" }
         "502": { $ref: "#/components/responses/PoolsUnread" }
   /v1/gateway/keys:
@@ -774,6 +789,34 @@ components:
         cost: { type: number }
         agent_hours: { type: number }
         works: { type: integer }
+    Headroom:
+      type: object
+      required: [provider, rotating, usable, used, binding, bounds]
+      properties:
+        provider: { type: string }
+        rotating: { type: boolean, description: The provider's build accounts rotate. }
+        usable: { type: boolean, description: An account can run now. }
+        free_at: { type: string, format: date-time, description: When an account can run again, while none can. }
+        used: { type: number, description: How much of what the machine can draw on is used, 0 to 1. }
+        binding: { type: string, description: What sets used, in words. }
+        bounds:
+          type: array
+          description: Every limit that applies, the tightest pool first, then the account in use.
+          items: { $ref: "#/components/schemas/Bound" }
+    Bound:
+      type: object
+      required: [window, of, used]
+      properties:
+        window: { type: string }
+        scope: { type: string, description: The model the limit is kept for; absent for the whole account. }
+        of: { type: string, enum: [pool, account] }
+        used: { type: number, description: 0 to 1. }
+        resets_at: { type: string, format: date-time }
+        accounts: { type: integer }
+        capacity: { type: number }
+        remaining: { type: number }
+        burn: { type: number, description: Points used an hour. }
+        empty: { type: string, format: date-time }
     Pool:
       type: object
       required: [provider, window, accounts, capacity, remaining, burn, recorded, projected, refills]

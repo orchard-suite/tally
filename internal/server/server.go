@@ -162,7 +162,7 @@ func (s *Server) Session() http.Handler {
 }
 
 // API is the machine port: the health check, shippers' posts, and the
-// pools a machine's agents draw on, each let in by its own bearer token.
+// headroom a machine's agents have, each let in by its own bearer token.
 func (s *Server) API() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -171,7 +171,7 @@ func (s *Server) API() http.Handler {
 	if s.cfg.Agents != nil {
 		mux.HandleFunc("POST /v1/usage", s.cfg.Agents.Ingest)
 		mux.HandleFunc("DELETE /v1/usage", s.cfg.Agents.Withdraw)
-		mux.HandleFunc("GET /v1/machine/pools", s.machinePools)
+		mux.HandleFunc("GET /v1/machine/headroom", s.machineHeadroom)
 	}
 	return telemetry.Handler(mux, "api")
 }
@@ -379,41 +379,74 @@ func (s *Server) gatewayKeys(w http.ResponseWriter, r *http.Request) {
 
 const poolsFor = 2 * time.Minute
 
-// pools is GET /v1/pools: every subscription pool, recorded and projected,
-// read from Prometheus at most once in two minutes.
-func (s *Server) pools(w http.ResponseWriter, r *http.Request) {
+// readPools is every subscription pool, read from Prometheus at most once
+// in two minutes.
+func (s *Server) readPools(ctx context.Context) ([]pool.Pool, error) {
 	if s.prom == nil {
-		writeJSON(w, []pool.Pool{})
-		return
+		return []pool.Pool{}, nil
 	}
 	s.poolsMu.Lock()
 	defer s.poolsMu.Unlock()
 	if time.Since(s.poolsAt) >= poolsFor || s.poolsData == nil {
-		p, err := pool.Query(r.Context(), s.prom, time.Now().UTC().Truncate(time.Minute))
+		p, err := pool.Query(ctx, s.prom, time.Now().UTC().Truncate(time.Minute))
 		if err != nil {
-			s.log.WarnContext(r.Context(), "pools not read", "error", err)
-			s.inst.Upstream(r.Context(), "prometheus", collect.Failed)
-			http.Error(w, "pools not read", http.StatusBadGateway)
-			return
+			s.inst.Upstream(ctx, "prometheus", collect.Failed)
+			return nil, err
 		}
-		s.inst.Upstream(r.Context(), "prometheus", collect.OK)
+		s.inst.Upstream(ctx, "prometheus", collect.OK)
 		s.poolsAt, s.poolsData = time.Now(), p
 	}
-	writeJSON(w, s.poolsData)
+	return s.poolsData, nil
 }
 
-// machinePools is GET /v1/machine/pools: the pools of GET /v1/pools, for
-// a machine that shows its shipping token, so an app on it can tell how
-// much of the subscriptions its agents draw on is left.
-func (s *Server) machinePools(w http.ResponseWriter, r *http.Request) {
+// pools is GET /v1/pools: every subscription pool, recorded and projected.
+func (s *Server) pools(w http.ResponseWriter, r *http.Request) {
+	p, err := s.readPools(r.Context())
+	if err != nil {
+		s.log.WarnContext(r.Context(), "pools not read", "error", err)
+		http.Error(w, "pools not read", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, p)
+}
+
+// machineHeadroom is GET /v1/machine/headroom: what a machine's agents can
+// draw on from one provider, for the models they run, for a machine that
+// shows its shipping token. Tally does the working out, so the app on the
+// machine needs no rules of its own.
+func (s *Server) machineHeadroom(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	machine := s.cfg.Agents.Machine(r)
 	if machine == "" {
-		s.log.WarnContext(r.Context(), "machine pools refused", "reason", "no token or an unknown token")
+		s.log.WarnContext(ctx, "machine headroom refused", "reason", "no token or an unknown token")
 		http.Error(w, "unknown token", http.StatusUnauthorized)
 		return
 	}
-	s.log.InfoContext(r.Context(), "machine pools let in", "machine", machine)
-	s.pools(w, r)
+	provider := r.URL.Query().Get("provider")
+	if provider == "" {
+		provider = "claude"
+	}
+	models := r.URL.Query()["model"]
+	pools, err := s.readPools(ctx)
+	if err != nil {
+		s.log.WarnContext(ctx, "machine headroom not read", "machine", machine, "error", err)
+		http.Error(w, "pools not read", http.StatusBadGateway)
+		return
+	}
+	var rot pool.Rotation
+	if s.prom != nil {
+		rot, err = pool.QueryRotation(ctx, s.prom, provider)
+		if err != nil {
+			s.inst.Upstream(ctx, "prometheus", collect.Failed)
+			s.log.WarnContext(ctx, "machine headroom not read", "machine", machine, "error", err)
+			http.Error(w, "rotation not read", http.StatusBadGateway)
+			return
+		}
+		s.inst.Upstream(ctx, "prometheus", collect.OK)
+	}
+	h := pool.Machine(provider, models, pools, rot)
+	s.log.InfoContext(ctx, "machine headroom read", "machine", machine, "provider", provider, "models", models, "used", h.Used, "usable", h.Usable)
+	writeJSON(w, h)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
