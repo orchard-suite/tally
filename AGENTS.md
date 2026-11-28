@@ -189,7 +189,9 @@ https://github.com/orchard-suite/hedge/blob/main/docs/fixtures.md.
 Agents push to main.
 
 Commit on `main` and land with `make land` (`make land BRANCH=<branch>` from
-a worktree). It runs `make check`, then `release-damnit land`. CI runs the
+a worktree). It runs `release-damnit land`, which runs the config's check
+(`make check`) on exactly what lands and signs a landing proof that the
+release verifies. CI runs the
 same check on every push and pull request (`test.yml`); the release calls
 it first, then versions every `feat` and `fix`, tags it, and builds
 `ghcr.io/orchard-suite/tally:<version>` for `linux/amd64` and the shipper
@@ -207,5 +209,5 @@ log is `~/Library/Logs/tally-ship.log`.
 make check
 ```
 
-Run it before every commit; `make land` runs it again before it lands, and
+Run it before every commit; `make land` runs it again on what lands, and
 CI runs it on every push. It needs Go (see `go.mod`).

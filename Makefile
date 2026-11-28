@@ -55,7 +55,8 @@ install-ship:
 install-rotation:
 	install -m 755 claude-rotation $(HOME)/.local/bin/claude-rotation
 
-# Lands on main after the check passes. From a worktree:
-# make land BRANCH=<branch>.
-land: check
+# Lands main: release-damnit land runs the config's check (make check) on
+# exactly what lands and signs its proof, which the release verifies. From a
+# worktree: make land BRANCH=<branch>.
+land:
 	release-damnit land $(BRANCH)
