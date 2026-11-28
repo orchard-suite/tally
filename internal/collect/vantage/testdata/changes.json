@@ -1,0 +1,12 @@
+{
+  "changes": [
+    {"position": 11, "item": "ACME-7", "kind": "ACME", "type": "created", "at": "2026-11-20T15:00:00.000Z", "actor": "ada@example.com", "actorKind": "person", "surface": "web", "data": {"type": "created", "key": "ACME-7", "scope": "billing"}},
+    {"position": 12, "item": "ACME-7", "kind": "ACME", "type": "claimed", "at": "2026-11-20T15:04:30.000Z", "actor": "ada@example.com", "agent": "claude-code on laptop-1", "actorKind": "agent", "surface": "mcp", "data": {"type": "claimed", "userId": "u1", "until": "2026-11-20T15:24:30.000Z", "agentId": "a1", "run": "3f0c9a52-1d7e-4b8a-9c11-2b6f8e4d0a71"}},
+    {"position": 13, "item": "ACME-7", "kind": "ACME", "type": "renewed", "at": "2026-11-20T15:14:30.000Z", "actor": "ada@example.com", "agent": "claude-code on laptop-1", "actorKind": "agent", "surface": "mcp", "data": {"type": "renewed", "until": "2026-11-20T15:34:30.000Z"}},
+    {"position": 14, "item": "ACME-9", "kind": "ACME", "type": "claimed", "at": "2026-11-20T15:20:00.000Z", "actor": "bo@example.com", "actorKind": "person", "surface": "web", "data": {"type": "claimed", "userId": "u2", "until": "2026-11-20T15:40:00.000Z", "agentId": null, "run": "user:u2"}},
+    {"position": 15, "item": "ACME-9", "kind": "ACME", "type": "scoped", "at": "2026-11-20T15:21:00.000Z", "actor": "bo@example.com", "actorKind": "person", "surface": "web", "data": {"type": "scoped", "scope": "payments"}},
+    {"position": 16, "item": "ACME-9", "kind": "ACME", "type": "claimed", "at": "2026-11-20T15:30:10.000Z", "actor": "ada@example.com", "agent": "claude-code on laptop-1", "actorKind": "agent", "surface": "mcp", "data": {"type": "claimed", "userId": "u1", "until": "2026-11-20T15:50:10.000Z", "agentId": "a1", "run": "3f0c9a52-1d7e-4b8a-9c11-2b6f8e4d0a71"}},
+    {"position": 17, "item": "ACME-9", "kind": "ACME", "type": "ran", "at": "2026-11-20T15:45:00.000Z", "actor": "ada@example.com", "agent": "claude-code on laptop-1", "actorKind": "agent", "surface": "mcp", "data": {"type": "ran", "run": {"summary": "did it", "proof": []}}}
+  ],
+  "next": 17
+}

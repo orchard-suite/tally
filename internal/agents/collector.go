@@ -35,14 +35,17 @@ type Collector struct {
 	zone     *time.Location
 	every    time.Duration
 	pricesAt string
-	client   *http.Client
-	batches  metric.Int64Counter
+	// pricesFile is the estate's own price table (PRICES_FILE), or empty.
+	pricesFile string
+	client     *http.Client
+	batches    metric.Int64Counter
 
 	mu sync.Mutex
 	// enrolled are the machines an enrollment source named, by the hash
 	// of each one's token, beside the ones SHIP_TOKENS names.
 	enrolled map[string]string
 	prices   Prices
+	estate   map[string][]Version
 	pricedAt time.Time
 	snap     snapshot
 }
@@ -110,7 +113,8 @@ const pricesEvery = 24 * time.Hour
 // each machine's owner from MACHINE_OWNERS (machine=owner, comma
 // separated). AGENTS_BILLING says how the work is paid for: subscription
 // (the default) or api, which makes its cost part of the estate. It is off
-// without AGENTS_DB.
+// without AGENTS_DB. PRICES_FILE names the estate's own dated prices
+// (ParseEstatePrices), read again every round.
 func FromEnv(log *slog.Logger, inst *collect.Instruments) (*Collector, error) {
 	path := os.Getenv("AGENTS_DB")
 	if path == "" {
@@ -146,9 +150,17 @@ func FromEnv(log *slog.Logger, inst *collect.Instruments) (*Collector, error) {
 	}
 	c := &Collector{store: store, log: log, inst: inst, machines: machines, owners: owners, billing: billing, zone: zone,
 		every: collect.Interval(os.Getenv("AGENTS_INTERVAL"), 5*time.Minute), pricesAt: os.Getenv("PRICES_URL"),
-		client: &http.Client{Timeout: time.Minute}}
+		pricesFile: os.Getenv("PRICES_FILE"), client: &http.Client{Timeout: time.Minute}}
 	if c.pricesAt == "" {
 		c.pricesAt = PricesURL
+	}
+	if c.pricesFile != "" {
+		// A file that is wrong at the start stops the start; later, a round
+		// that cannot read it keeps the versions it had.
+		if c.estate, err = c.readEstatePrices(); err != nil {
+			store.Close()
+			return nil, fmt.Errorf("PRICES_FILE: %w", err)
+		}
 	}
 	if err := c.register(); err != nil {
 		return nil, err
@@ -202,11 +214,22 @@ func (c *Collector) Interval() time.Duration { return c.every }
 // Store is the agent store, for the board.
 func (c *Collector) Store() *Store { return c.store }
 
-// Prices is the price table as last read, empty before the first read.
-func (c *Collector) Prices() Prices {
+// Prices is the price table as last read: the estate's own versions and
+// the public table. It is empty before the first read.
+func (c *Collector) Prices() Table {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.prices
+	return Table{Estate: c.estate, Public: c.prices}
+}
+
+// readEstatePrices reads the estate's price file. A file that cannot be read
+// or parsed fails the round and keeps the versions read before.
+func (c *Collector) readEstatePrices() (map[string][]Version, error) {
+	raw, err := os.ReadFile(c.pricesFile)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEstatePrices(raw)
 }
 
 // Run refreshes on every interval until ctx ends.
@@ -229,6 +252,15 @@ func (c *Collector) round(ctx context.Context) error {
 			c.prices, c.pricedAt = p, time.Now()
 			c.mu.Unlock()
 			c.log.InfoContext(ctx, "prices read", "models", len(p))
+		}
+	}
+	if c.pricesFile != "" {
+		if v, err := c.readEstatePrices(); err != nil {
+			errs = append(errs, fmt.Errorf("estate prices: %w", err))
+		} else {
+			c.mu.Lock()
+			c.estate = v
+			c.mu.Unlock()
 		}
 	}
 	now := time.Now().In(c.zone)
@@ -267,18 +299,19 @@ func (c *Collector) round(ctx context.Context) error {
 		}
 		months = append(months, ByMonth(start.Format("2006-01"), ms)...)
 	}
+	prices := c.Prices()
 	c.mu.Lock()
-	prices := c.prices
 	c.snap = snapshot{uses: uses, sums: sums, posts: posts, months: months, spend: Spend{Trailing: Price(trailing, prices), MonthToDate: Price(sums, prices), Previous: Price(previous, prices)}}
 	c.mu.Unlock()
 	return errors.Join(errs...)
 }
 
-// Price is what sums cost at prices; a model with no price adds nothing.
-func Price(sums []Sum, prices Prices) float64 {
+// Price is what sums cost at prices, each at its day's price; a model with
+// no price adds nothing.
+func Price(sums []Sum, prices Table) float64 {
 	total := 0.0
 	for _, s := range sums {
-		if r, ok := prices[Model(s.Model)]; ok {
+		if r, ok := prices.Rate(s.Model, s.Day); ok {
 			total += r.Cost(s.Tokens)
 		}
 	}
@@ -302,11 +335,11 @@ func (c *Collector) Spend() *Spend {
 	if c.billing != API {
 		return nil
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.prices == nil {
+	if c.Prices().Empty() {
 		return nil
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	s := c.snap.spend
 	return &s
 }
@@ -368,21 +401,28 @@ func (c *Collector) register() error {
 		return err
 	}
 	_, err = m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+		prices := c.Prices()
 		c.mu.Lock()
-		snap, prices := c.snap, c.prices
+		snap := c.snap
 		c.mu.Unlock()
 		type key struct{ machine, model, role string }
 		byKey := map[key]Tokens{}
+		costs := map[key]float64{}
+		priced := map[key]bool{}
 		for _, s := range snap.sums {
 			k := key{s.Machine, Model(s.Model), s.Role}
 			t := byKey[k]
 			t.Add(s.Tokens)
 			byKey[k] = t
+			if r, ok := prices.Rate(s.Model, s.Day); ok {
+				costs[k] += r.Cost(s.Tokens)
+				priced[k] = true
+			}
 		}
 		for k, t := range byKey {
 			attrs := []attribute.KeyValue{attribute.String("machine", k.machine), attribute.String("model", k.model), attribute.String("role", k.role)}
-			if r, ok := prices[k.model]; ok {
-				o.ObserveFloat64(cost, r.Cost(t), metric.WithAttributes(attrs...))
+			if priced[k] {
+				o.ObserveFloat64(cost, costs[k], metric.WithAttributes(attrs...))
 			}
 			for kind, n := range map[string]int64{"input": t.Input, "cache_write": t.CacheWrite5m + t.CacheWrite1h, "cache_read": t.CacheRead, "output": t.Output} {
 				o.ObserveInt64(tokens, n, metric.WithAttributes(append(attrs, attribute.String("kind", kind))...))
@@ -514,4 +554,58 @@ func (c *Collector) InstalledOn(ctx context.Context, since time.Time) (map[strin
 // UseRows are each machine's uses from from up to to.
 func (c *Collector) UseRows(ctx context.Context, from, to time.Time) ([]UseRow, error) {
 	return c.store.UseRows(ctx, from, to)
+}
+
+// RunSpend is agent work from from up to to, rolled up through the Vantage
+// items its runs worked, at the prices last read.
+func (c *Collector) RunSpend(ctx context.Context, from, to time.Time) (SpendReport, error) {
+	rows, err := c.store.Rows(ctx, from, to)
+	if err != nil {
+		return SpendReport{}, err
+	}
+	links, err := c.store.Links(ctx)
+	if err != nil {
+		return SpendReport{}, err
+	}
+	return BuildSpend(rows, links, c.Prices(), from, to), nil
+}
+
+// RunPrice is GET /v1/runs/{run}: what one run cost, of what the machine its
+// bearer token names posted, as a Vantage run record holds a cost. A machine
+// prices only its own runs.
+func (c *Collector) RunPrice(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	machine := c.Machine(r)
+	if machine == "" {
+		c.log.WarnContext(ctx, "run price refused", "reason", "no token or an unknown token")
+		http.Error(w, "unknown token", http.StatusUnauthorized)
+		return
+	}
+	run := r.PathValue("run")
+	if !ValidRun(run) {
+		c.log.WarnContext(ctx, "run price refused", "machine", machine, "reason", "not a run id")
+		http.Error(w, "not a run id", http.StatusBadRequest)
+		return
+	}
+	prices := c.Prices()
+	if prices.Empty() {
+		c.log.WarnContext(ctx, "run price refused", "machine", machine, "reason", "no prices read yet")
+		http.Error(w, "no prices read yet", http.StatusServiceUnavailable)
+		return
+	}
+	rows, err := c.store.RunRows(ctx, machine, run)
+	if err != nil {
+		c.log.ErrorContext(ctx, "run price not read", "machine", machine, "error", err)
+		http.Error(w, "not read", http.StatusInternalServerError)
+		return
+	}
+	cost := PriceRun(run, rows, prices)
+	if cost.Conversations == 0 {
+		c.log.InfoContext(ctx, "run price not found", "machine", machine, "run", run)
+		http.Error(w, "this machine posted no conversation of that run", http.StatusNotFound)
+		return
+	}
+	c.log.InfoContext(ctx, "run priced", "machine", machine, "run", run, "conversations", cost.Conversations)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(cost)
 }

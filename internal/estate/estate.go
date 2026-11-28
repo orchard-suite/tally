@@ -64,7 +64,7 @@ type Sources struct {
 	// Shipped is the agent work machines posted, by month and model, and
 	// Prices the table it and the gateway's tokens are priced at.
 	Shipped func() []agents.MonthModel
-	Prices  func() agents.Prices
+	Prices  func() agents.Table
 	// Zone is where calendar months begin; nil is UTC.
 	Zone *time.Location
 	// ClusterHosts are the powered hosts whose cost the namespaces share.
@@ -628,9 +628,9 @@ func (s Sources) shipped() []agents.MonthModel {
 	return s.Shipped()
 }
 
-func (s Sources) prices() agents.Prices {
+func (s Sources) prices() agents.Table {
 	if s.Prices == nil {
-		return nil
+		return agents.Table{}
 	}
 	return s.Prices()
 }

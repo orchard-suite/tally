@@ -20,7 +20,7 @@ const MaxDays = 400
 
 // BuildDays adds rows up by day in loc, one entry for every day from from
 // up to to, empty days included.
-func BuildDays(rows []Row, prices Prices, from, to time.Time, loc *time.Location) []Day {
+func BuildDays(rows []Row, prices Table, from, to time.Time, loc *time.Location) []Day {
 	type key struct{ machine, id string }
 	type convMinute struct {
 		conv   key
@@ -42,7 +42,7 @@ func BuildDays(rows []Row, prices Prices, from, to time.Time, loc *time.Location
 		}
 		d := &out[i]
 		d.Total += r.Total()
-		if rate, ok := prices[Model(r.Model)]; ok {
+		if rate, ok := prices.Rate(r.Model, r.Minute); ok {
 			d.Cost += rate.Cost(r.Tokens)
 		}
 		if minutes[i] == nil {

@@ -43,6 +43,8 @@ install-ship:
 	@test -n "$(TALLY_URL)" || { echo "install-ship: set TALLY_URL to the tally this Mac posts to" >&2; exit 1; }
 	@test -s $(HOME)/.config/tally/ship-token || { echo "install-ship: put this machine's token in ~/.config/tally/ship-token" >&2; exit 1; }
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(HOME)/.local/bin/tally ./cmd/tally
+	@# `tally ship cost` runs from an agent's bridge with none of the plist's settings; it reads the URL here.
+	printf '%s\n' "$(TALLY_URL)" > $(HOME)/.config/tally/ship-url
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
 	sed -e "s|__LABEL__|$(SHIP_LABEL)|g" -e "s|__HOME__|$(HOME)|g" -e "s|__TALLY_URL__|$(TALLY_URL)|g" -e "s|__SHIP_ROUTE__|$(SHIP_ROUTE)|g" deploy/macos/tally-ship.plist > $(SHIP_PLIST)
 	launchctl bootout gui/$$(id -u)/$(SHIP_LABEL) 2>/dev/null || true

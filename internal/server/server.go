@@ -155,6 +155,7 @@ func (s *Server) Session() http.Handler {
 	handle("GET /v1/agents", s.agents)
 	handle("GET /v1/agents/days", s.agentDays)
 	handle("GET /v1/agents/uses", s.agentUses)
+	handle("GET /v1/agents/spend", s.agentSpend)
 	handle("GET /v1/pools", s.pools)
 	handle("GET /v1/gateway/keys", s.gatewayKeys)
 	mux.Handle("POST /api/telemetry", s.gate.Wrap(s.relay))
@@ -172,6 +173,7 @@ func (s *Server) API() http.Handler {
 		mux.HandleFunc("POST /v1/usage", s.cfg.Agents.Ingest)
 		mux.HandleFunc("DELETE /v1/usage", s.cfg.Agents.Withdraw)
 		mux.HandleFunc("GET /v1/machine/headroom", s.machineHeadroom)
+		mux.HandleFunc("GET /v1/runs/{run}", s.cfg.Agents.RunPrice)
 	}
 	return telemetry.Handler(mux, "api")
 }
@@ -345,6 +347,38 @@ func (s *Server) agentDays(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, days)
+}
+
+// agentSpend is GET /v1/agents/spend?from=2006-01-02&to=2006-01-02: agent
+// work over the days from from through to, in tz or the board's zone,
+// rolled up through the Vantage items its runs worked: by item, program,
+// department, and agent. It names no person, so every tier sees it; an
+// agent's host is a machine, so only the detail tier sees it.
+func (s *Server) agentSpend(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Agents == nil {
+		http.Error(w, "the agents collector is off", http.StatusNotFound)
+		return
+	}
+	q := r.URL.Query()
+	loc, err := s.zone(q.Get("tz"))
+	if err != nil {
+		http.Error(w, "tz is not a zone", http.StatusBadRequest)
+		return
+	}
+	from, err1 := time.ParseInLocation(time.DateOnly, q.Get("from"), loc)
+	to, err2 := time.ParseInLocation(time.DateOnly, q.Get("to"), loc)
+	if err1 != nil || err2 != nil || to.Before(from) || to.Sub(from) > agents.MaxDays*24*time.Hour {
+		http.Error(w, fmt.Sprintf("from and to are dates, from first, at most %d days apart", agents.MaxDays), http.StatusBadRequest)
+		return
+	}
+	rep, err := s.cfg.Agents.RunSpend(r.Context(), from, to.AddDate(0, 0, 1))
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "agent spend failed", "error", err)
+		http.Error(w, "spend failed", http.StatusInternalServerError)
+		return
+	}
+	users, _ := s.sees(r)
+	writeJSON(w, rep.Limit(users))
 }
 
 // GatewayKeys is GET /v1/gateway/keys: what every AI gateway key used in

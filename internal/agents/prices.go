@@ -1,10 +1,17 @@
 package agents
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // PricesURL is LiteLLM's public table of model prices, the one most tools
@@ -103,6 +110,107 @@ func ParsePrices(raw []byte) (Prices, error) {
 		}
 		out[name] = r
 		exact[name] = bare
+	}
+	return out, nil
+}
+
+// Version is one model's price from a day on, as the estate set it.
+type Version struct {
+	// From is the first day the price is in force, at 00:00 UTC.
+	From time.Time
+	Rate
+}
+
+// Table is the price of every model on any day: the estate's own dated
+// versions first, and the public table for a model the estate does not
+// price, or a day before its first version. A new price is a new version,
+// so the days before it keep theirs.
+type Table struct {
+	// Estate are each bare model's versions, oldest first.
+	Estate map[string][]Version
+	// Public is the public table as last read.
+	Public Prices
+}
+
+// Table is p alone, with no estate prices.
+func (p Prices) Table() Table { return Table{Public: p} }
+
+// Empty says the table prices nothing yet.
+func (t Table) Empty() bool { return len(t.Estate) == 0 && len(t.Public) == 0 }
+
+// Rate is model's rate on at's day.
+func (t Table) Rate(model string, at time.Time) (Rate, bool) {
+	m := Model(model)
+	vs := t.Estate[m]
+	if i := sort.Search(len(vs), func(i int) bool { return vs[i].From.After(at) }); i > 0 {
+		return vs[i-1].Rate, true
+	}
+	r, ok := t.Public[m]
+	return r, ok
+}
+
+// perMillion is how the estate's file states a price: dollars per million
+// tokens.
+const perMillion = 1e6
+
+// ParseEstatePrices reads the estate's price file (PRICES_FILE):
+//
+//	models:
+//	  claude-opus-5-5:
+//	    - from: 2026-11-01
+//	      input: 5
+//	      output: 25
+//	      cache_read: 0.5
+//	      cache_write: 6.25
+//	      cache_write_1h: 10
+//
+// Prices are dollars per million tokens. cache_write is the five-minute
+// write; cache_write_1h defaults to it. A model's name is made bare, and two
+// versions of one model may not start on one day.
+func ParseEstatePrices(raw []byte) (map[string][]Version, error) {
+	var f struct {
+		Models map[string][]struct {
+			From         string   `yaml:"from"`
+			Input        *float64 `yaml:"input"`
+			Output       *float64 `yaml:"output"`
+			CacheRead    *float64 `yaml:"cache_read"`
+			CacheWrite   *float64 `yaml:"cache_write"`
+			CacheWrite1h *float64 `yaml:"cache_write_1h"`
+		} `yaml:"models"`
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec.KnownFields(true)
+	if err := dec.Decode(&f); err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	out := map[string][]Version{}
+	for name, versions := range f.Models {
+		m := Model(name)
+		for _, v := range versions {
+			from, err := time.Parse(time.DateOnly, v.From)
+			if err != nil {
+				return nil, fmt.Errorf("%s: from %q is not a date (YYYY-MM-DD)", name, v.From)
+			}
+			if v.Input == nil || v.Output == nil || v.CacheRead == nil || v.CacheWrite == nil {
+				return nil, fmt.Errorf("%s from %s: input, output, cache_read, and cache_write are all set", name, v.From)
+			}
+			r := Rate{Input: *v.Input / perMillion, Output: *v.Output / perMillion, CacheRead: *v.CacheRead / perMillion, CacheWrite5m: *v.CacheWrite / perMillion}
+			r.CacheWrite1h = r.CacheWrite5m
+			if v.CacheWrite1h != nil {
+				r.CacheWrite1h = *v.CacheWrite1h / perMillion
+			}
+			if r.Input < 0 || r.Output < 0 || r.CacheRead < 0 || r.CacheWrite5m < 0 || r.CacheWrite1h < 0 {
+				return nil, fmt.Errorf("%s from %s: a negative price", name, v.From)
+			}
+			out[m] = append(out[m], Version{From: from, Rate: r})
+		}
+		vs := out[m]
+		sort.Slice(vs, func(a, b int) bool { return vs[a].From.Before(vs[b].From) })
+		for i := 1; i < len(vs); i++ {
+			if vs[i].From.Equal(vs[i-1].From) {
+				return nil, fmt.Errorf("%s: two versions from %s", m, vs[i].From.Format(time.DateOnly))
+			}
+		}
 	}
 	return out, nil
 }

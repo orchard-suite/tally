@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -207,7 +209,7 @@ func TestGatewayKeysAreTheDetailTiers(t *testing.T) {
 	snap := &gateway.Snapshot{Rows: []gateway.Row{{Day: "2026-10-03", Key: "dev--ada--max", Product: "dev_pro_max", Model: "claude-opus-5-5", Tokens: agents.Tokens{Input: 1000}}}}
 	sources := estate.Sources{
 		Gateway: func() *gateway.Snapshot { return snap },
-		Prices:  func() agents.Prices { return agents.Prices{"claude-opus-5-5": {Input: 1e-3}} },
+		Prices:  func() agents.Table { return agents.Prices{"claude-opus-5-5": {Input: 1e-3}}.Table() },
 	}
 	s, err := New(Config{Role: "Viewer", DetailRole: "Detail", AdminRole: "Admin"}, sources, inst, relay, log)
 	if err != nil {
@@ -290,5 +292,101 @@ func TestAMachineReadsItsHeadroomByItsToken(t *testing.T) {
 	}
 	if h.Provider != "claude" || !h.Usable || h.Used != 0 || h.Binding != "no limit read" {
 		t.Fatalf("nothing read: %+v", h)
+	}
+}
+
+func TestARunIsPricedForItsMachineAndRolledUp(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	inst, err := collect.NewInstruments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine, theirs := sha256.Sum256([]byte("secret")), sha256.Sum256([]byte("other"))
+	prices := filepath.Join(t.TempDir(), "prices.yaml")
+	if err := os.WriteFile(prices, []byte("models:\n  claude-opus-5-5:\n    - {from: 2026-11-01, input: 1, output: 1000000, cache_read: 0, cache_write: 0}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AGENTS_DB", filepath.Join(t.TempDir(), "agents.db"))
+	t.Setenv("SHIP_TOKENS", "laptop-1="+hex.EncodeToString(mine[:])+",laptop-2="+hex.EncodeToString(theirs[:]))
+	t.Setenv("PRICES_FILE", prices)
+	ag, err := agents.FromEnv(log, inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay, _ := faro.NewRelay(faro.Config{Service: collect.Service, Version: "test"}, log)
+	s, err := New(Config{Role: "Viewer", DetailRole: "Detail", Agents: ag}, estate.Sources{}, inst, relay, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := httptest.NewServer(s.API())
+	defer api.Close()
+	session := httptest.NewServer(s.Session())
+	defer session.Close()
+
+	const run = "3f0c9a52-1d7e-4b8a-9c11-2b6f8e4d0a71"
+	body := `{"conversations":[{"id":"claude:` + run + `","work":"w1","agent":"claude","role":"lead"},{"id":"claude:` + run + `/agent-a1","work":"w1","agent":"claude","role":"child","parent":"claude:` + run + `"}],
+"buckets":[{"conversation":"claude:` + run + `","model":"claude-opus-5-5","minute":"2026-11-20T15:05:00Z","requests":1,"input":0,"cache_write_5m":0,"cache_write_1h":0,"cache_read":0,"output":2},
+{"conversation":"claude:` + run + `/agent-a1","model":"claude-opus-5-5","minute":"2026-11-20T15:06:00Z","requests":1,"input":0,"cache_write_5m":0,"cache_write_1h":0,"cache_read":0,"output":3}]}`
+	req, _ := http.NewRequest(http.MethodPost, api.URL+"/v1/usage", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer secret")
+	if res, err := http.DefaultClient.Do(req); err != nil || res.StatusCode != http.StatusNoContent {
+		t.Fatalf("post: %v %v", res, err)
+	}
+	price := func(token, id string) (int, agents.RunCost) {
+		req, _ := http.NewRequest(http.MethodGet, api.URL+"/v1/runs/"+id, nil)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var c agents.RunCost
+		_ = json.NewDecoder(res.Body).Decode(&c)
+		return res.StatusCode, c
+	}
+	if code, c := price("secret", run); code != http.StatusOK || c.Amount != 5 || c.Currency != "USD" || c.Tokens != 5 || c.Conversations != 2 {
+		t.Fatalf("the machine's run at the estate's price: %d %+v", code, c)
+	}
+	if code, _ := price("other", run); code != http.StatusNotFound {
+		t.Fatalf("another machine prices only its own runs: %d", code)
+	}
+	if code, _ := price("", run); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+	if code, _ := price("secret", "a%20b"); code != http.StatusBadRequest {
+		t.Fatalf("not a run id: %d", code)
+	}
+
+	at := time.Date(2026, 11, 20, 15, 4, 0, 0, time.UTC)
+	if err := ag.Store().TakeFeed(context.Background(), []agents.Claim{{Run: run, Item: "ACME-7", Agent: "claude-code on laptop-1", At: at}}, nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := ag.Store().SetItemScope(context.Background(), "ACME-7", "billing", at); err != nil {
+		t.Fatal(err)
+	}
+	spend := func(roles string) agents.SpendReport {
+		req, _ := http.NewRequest(http.MethodGet, session.URL+"/v1/agents/spend?from=2026-11-20&to=2026-11-20&tz=UTC", nil)
+		req.Header.Set("X-Forwarded-Email", "user@example.com")
+		req.Header.Set("X-Forwarded-Groups", roles)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("spend: %d", res.StatusCode)
+		}
+		var rep agents.SpendReport
+		_ = json.NewDecoder(res.Body).Decode(&rep)
+		return rep
+	}
+	rep := spend("Viewer")
+	if rep.ShowsHosts || len(rep.Items) != 1 || rep.Items[0].Item != "ACME-7" || rep.Items[0].Cost != 5 || len(rep.Agents) != 1 || rep.Agents[0].Agent != "claude-code" {
+		t.Fatalf("a viewer sees items and agents by name: %+v", rep)
+	}
+	if rep := spend("Detail"); !rep.ShowsHosts || rep.Agents[0].Agent != "claude-code on laptop-1" {
+		t.Fatalf("the detail role sees an agent's host: %+v", rep.Agents)
 	}
 }

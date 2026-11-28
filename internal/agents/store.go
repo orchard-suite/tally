@@ -24,7 +24,7 @@ func OpenStore(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(4)
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(schema + runSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("agents store: %w", err)
 	}
@@ -191,6 +191,11 @@ type Row struct {
 // Rows are every bucket from from up to to. A bucket whose conversation
 // tally has not been told about yet is its own lead work.
 func (s *Store) Rows(ctx context.Context, from, to time.Time) ([]Row, error) {
+	return s.rows(ctx, `u.minute >= ? AND u.minute < ?`, from.Unix(), to.Unix())
+}
+
+// rows are the buckets where says, each with its conversation and work.
+func (s *Store) rows(ctx context.Context, where string, args ...any) ([]Row, error) {
 	r, err := s.db.QueryContext(ctx, `
 SELECT u.machine, u.conversation, coalesce(c.parent, ''), coalesce(c.role, 'lead'), coalesce(c.work, u.conversation),
        coalesce(w.title, c.title, ''), coalesce(w.project, ''), u.model, u.minute,
@@ -198,7 +203,7 @@ SELECT u.machine, u.conversation, coalesce(c.parent, ''), coalesce(c.role, 'lead
 FROM usage u
 LEFT JOIN conversations c ON c.machine = u.machine AND c.id = u.conversation
 LEFT JOIN works w ON w.machine = c.machine AND w.id = c.work
-WHERE u.minute >= ? AND u.minute < ?`, from.Unix(), to.Unix())
+WHERE `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -217,23 +222,26 @@ WHERE u.minute >= ? AND u.minute < ?`, from.Unix(), to.Unix())
 	return out, r.Err()
 }
 
-// Sum is one machine, model, and role's tokens over a span.
+// Sum is one machine, model, and role's tokens on one day of a span.
 type Sum struct {
 	Machine string
 	Model   string
 	Role    string
+	// Day is the UTC day the tokens were spent, which picks their price.
+	Day time.Time
 	Tokens
 }
 
-// Sums are the tokens from from up to to, by machine, model, and role.
+// Sums are the tokens from from up to to, by machine, model, role, and UTC
+// day.
 func (s *Store) Sums(ctx context.Context, from, to time.Time) ([]Sum, error) {
 	r, err := s.db.QueryContext(ctx, `
-SELECT u.machine, u.model, coalesce(c.role, 'lead'),
+SELECT u.machine, u.model, coalesce(c.role, 'lead'), u.minute / 86400,
        sum(u.requests), sum(u.input), sum(u.cache_write_5m), sum(u.cache_write_1h), sum(u.cache_read), sum(u.output)
 FROM usage u
 LEFT JOIN conversations c ON c.machine = u.machine AND c.id = u.conversation
 WHERE u.minute >= ? AND u.minute < ?
-GROUP BY 1, 2, 3`, from.Unix(), to.Unix())
+GROUP BY 1, 2, 3, 4`, from.Unix(), to.Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +249,11 @@ GROUP BY 1, 2, 3`, from.Unix(), to.Unix())
 	var out []Sum
 	for r.Next() {
 		var x Sum
-		if err := r.Scan(&x.Machine, &x.Model, &x.Role, &x.Requests, &x.Input, &x.CacheWrite5m, &x.CacheWrite1h, &x.CacheRead, &x.Output); err != nil {
+		var day int64
+		if err := r.Scan(&x.Machine, &x.Model, &x.Role, &day, &x.Requests, &x.Input, &x.CacheWrite5m, &x.CacheWrite1h, &x.CacheRead, &x.Output); err != nil {
 			return nil, err
 		}
+		x.Day = time.Unix(day*86400, 0).UTC()
 		out = append(out, x)
 	}
 	return out, r.Err()

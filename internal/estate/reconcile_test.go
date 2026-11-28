@@ -42,7 +42,7 @@ func about(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 
 func TestReconcile(t *testing.T) {
 	b, g, s := lenses(t)
-	r := Reconcile(b, g, s, reconPrices)
+	r := Reconcile(b, g, s, reconPrices.Table())
 	var periods []string
 	for _, m := range r.Months {
 		periods = append(periods, m.Period)
@@ -89,7 +89,7 @@ func TestReconcile(t *testing.T) {
 func TestGatewayKeysShareTheBasisByCost(t *testing.T) {
 	_, g, _ := lenses(t)
 	basis := 80.0
-	keys := GatewayKeys(g, "2026-09", reconPrices, &basis)
+	keys := GatewayKeys(g, "2026-09", reconPrices.Table(), &basis)
 	if len(keys) != 3 || keys[0].Key != "dev--ada--max" || keys[1].Key != "dev--bob--pro" || keys[2].Key != "app--1--team--svc--job" {
 		t.Fatalf("keys costliest first: %+v", keys)
 	}
@@ -100,12 +100,12 @@ func TestGatewayKeysShareTheBasisByCost(t *testing.T) {
 	if !about(sum, 80) || !about(*keys[0].Billed, 80*7.5/12.08) {
 		t.Errorf("shares add up to the basis: %v %v", sum, *keys[0].Billed)
 	}
-	for _, k := range GatewayKeys(g, "2026-10", reconPrices, nil) {
+	for _, k := range GatewayKeys(g, "2026-10", reconPrices.Table(), nil) {
 		if k.Billed != nil || k.Unpriced != 110 {
 			t.Errorf("no bill, no share: %+v", k)
 		}
 	}
-	if len(GatewayKeys(nil, "2026-09", reconPrices, &basis)) != 0 {
+	if len(GatewayKeys(nil, "2026-09", reconPrices.Table(), &basis)) != 0 {
 		t.Error("no gateway, no keys")
 	}
 }

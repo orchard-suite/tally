@@ -82,7 +82,7 @@ func TestBuildReport(t *testing.T) {
 		// Work B: one minute of a model with no price.
 		row("lead-b", Lead, "b", at(8, 0), "mystery-1", Tokens{Requests: 1, Output: 5}),
 	}
-	rep := BuildReport(rows, prices, from, from.AddDate(0, 0, 1), at(9, 13))
+	rep := BuildReport(rows, prices.Table(), from, from.AddDate(0, 0, 1), at(9, 13))
 
 	cost := one.Input*1 + one.CacheWrite1h*3 + one.CacheRead/10 + one.Output*10
 	perRow := float64(cost) * 1e-6
@@ -305,7 +305,7 @@ func TestBuildDays(t *testing.T) {
 		// Before the span: not counted.
 		row("c4", "w3", from.Add(-time.Minute), "claude-opus-5-5", 9),
 	}
-	days := BuildDays(rows, prices, from, to, loc)
+	days := BuildDays(rows, prices.Table(), from, to, loc)
 	if len(days) != 3 || days[0].Day != "2026-10-31" || days[2].Day != "2026-11-02" {
 		t.Fatalf("one entry a day, empty days too: %+v", days)
 	}
@@ -325,7 +325,7 @@ func TestBuildDays(t *testing.T) {
 func TestPriceAndSpend(t *testing.T) {
 	prices := Prices{"claude-opus-5-5": {Output: 1}}
 	sums := []Sum{{Model: "us.anthropic.claude-opus-5-5", Tokens: Tokens{Output: 3}}, {Model: "mystery-1", Tokens: Tokens{Output: 9}}}
-	if got := Price(sums, prices); !near(got, 3) {
+	if got := Price(sums, prices.Table()); !near(got, 3) {
 		t.Fatalf("price %v: bare names priced, unpriced models add nothing", got)
 	}
 	c := &Collector{billing: Subscription, zone: time.UTC, prices: prices, snap: snapshot{spend: Spend{Trailing: 1}}}
