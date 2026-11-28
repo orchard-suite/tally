@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0](https://github.com/orchard-suite/tally/compare/v1.5.0...v1.6.0) (2026-11-28)
+
+### Features
+
+* **tally:** price agent runs by item and program ([ae4f708](https://github.com/orchard-suite/tally/commit/ae4f7085ef2b256ffc9f6cdf4d7742cb7b218af0))
+
 ## [1.5.0](https://github.com/orchard-suite/tally/compare/v1.4.0...v1.5.0) (2026-11-26)
 
 ### Features
