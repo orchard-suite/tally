@@ -1,0 +1,10 @@
+{
+  "source": "hub",
+  "scopes": [
+    {"id": "acme", "name": "Acme", "kind": "organization", "facets": []},
+    {"id": "finance", "name": "Finance", "kind": "department", "parent": "acme", "facets": []},
+    {"id": "billing", "name": "Billing", "kind": "program", "parent": "finance", "facets": []},
+    {"id": "payments", "name": "Payments", "kind": "program", "parent": "finance", "facets": []}
+  ],
+  "workspaces": {"billing": "billing"}
+}

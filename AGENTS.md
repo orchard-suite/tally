@@ -29,6 +29,8 @@ https://github.com/orchard-suite/hedge/blob/main/docs/fixtures.md.
   Advisor through Resource Graph), `aispend` (prices and usage APIs),
   `billed` (the bill as
   the billing pipeline pushes it into Orrery, read with an access token),
+  `vantage` (a Vantage hub's change feed: which item each agent run
+  claimed, each item's scope, and the scope tree, kept in the agent store),
   `gateway` (an AI gateway's token metrics in Log Analytics, by day, key,
   product, and model), and `subscriptions`. When `billed` has a month,
   `estate` takes it as the truth for cloud and AI; collected agent work
@@ -50,6 +52,14 @@ https://github.com/orchard-suite/hedge/blob/main/docs/fixtures.md.
   `POST /v1/usage` on the API port by bearer token (`SHIP_TOKENS`, hashes
   only). Cost is a conversation's own and never split; model names are
   bare (`agents.Model`) before they are priced, grouped, or exported.
+  The price table (`agents.Table`) is the estate's dated versions
+  (`PRICES_FILE`) over the public table, and every token is priced at its
+  own day's version: a sum that crosses days is grouped by day first, never
+  priced at today's rate (ORC-4010). A run is a Vantage run id
+  (`agents.RunOf`: a conversation's id without its agent prefix or
+  subagent tail); `spend.go` rolls runs up through the items they claimed,
+  each minute whole to one item, and `GET /v1/runs/{run}` prices one run
+  for the machine that posted it, in the shape a Vantage run record holds.
 - `internal/estate/reconcile.go` lines AI up through three lenses, each
   the truth for one thing: the bill for what was paid, the gateway for
   what was used, the shippers for what it was for. Nothing below the bill
@@ -124,18 +134,21 @@ https://github.com/orchard-suite/hedge/blob/main/docs/fixtures.md.
   catalog; the app never writes it itself.
 - `internal/server` answers on two ports. The session port (8080) is the
   board, `GET /v1/costs`, `GET /v1/agents`, `GET /v1/agents/days`,
-  `GET /v1/pools`, `GET /v1/gateway/keys`, and the
+  `GET /v1/agents/spend`, `GET /v1/pools`, `GET /v1/gateway/keys`, and the
   browser telemetry relay; it trusts the front door's `X-Forwarded-Email`
   and `X-Forwarded-Groups`, so only Traefik may reach it. The API port
   (8081) is `/healthz`, `POST /v1/usage`, `DELETE /v1/usage`, by
   which a shipper withdraws all its machine posted, and
   `GET /v1/machine/headroom`, what an app on a machine can draw on
   (`pool.Machine`: the rotation, the pools that apply to its models, and
-  one number for how close it is to nothing); all three trust only a
-  shipper's bearer token. What of agent work a person sees is
+  one number for how close it is to nothing), and `GET /v1/runs/{run}`,
+  what one of the machine's runs cost, which `tally ship cost` prints for
+  a Vantage bridge; all of them trust only a shipper's bearer token. What of agent work a person sees is
   `Report.Limit`: spend by user needs `DETAIL_ROLE`, the work and its
   conversations need `ADMIN_ROLE`, and everyone else gets totals and
-  models. A new view of agent data decides which tier it belongs to.
+  models. Spend by item, scope, and agent names no person, so every tier
+  sees it; an agent's host is a machine, so only the detail tier sees it
+  (`SpendReport.Limit`). A new view of agent data decides which tier it belongs to.
 - `internal/server/static` is the board, plain scripts with no build:
   `app.js` is the core (formatting, the router, the rail's index, the
   shared pool chart, telemetry), `estate.js` the Statement view, and

@@ -17,9 +17,10 @@ turns on from configuration, so it fits any organization.
 | `machines` | `PROMETHEUS_URL` with `MACHINES=on`, and `MACHINES_SKIP` (`host,...`) to leave out physical hosts and people's own machines | Each server's memory total, its memory used at p95 and at peak, and its CPU used at p95 over `MACHINES_WINDOW` (7d), from the device vitals (`device_*{role="server"}`), with the core count node-exporter gives where it runs; for a Kubernetes node, what its pods ask for and what it holds back | `tally.machines.recommendation` (1, with `kind` over or under) by `host`, `resource` |
 | `advisor` | `ADVISOR=on` and the Azure identity's environment; the identity needs Reader where the VMs are | Azure Advisor's open advice to resize or shut down underused virtual machines, through Resource Graph, for every subscription the identity can see: the size now, the size advised, the kind of change, CPU and memory at p95, and the saving a year | `tally.advisor.recommendations`, `tally.advisor.savings` by `change` and `counted` |
 | `ai` | `PLAN_PRICES` (`provider:plan=price,...`, applied to every account the `subscriptions` collector sees on that plan, such as `claude:max=200`), `SUBSCRIPTION_PRICES` (`provider:account=price,...`, a price by name, which wins), `OPENAI_ADMIN_KEY`, `ANTHROPIC_ADMIN_KEY` | Each subscription's monthly price, and month-to-date tokens from a provider's organization usage API where there is one. An account on a plan with no price is listed unpriced. | `tally.ai.cost_per_month` by `provider`, `account`; `tally.ai.tokens` by `provider`, `account`, `direction` |
-| `agents` | `AGENTS_DB` (the store's path), with `SHIP_TOKENS` (`machine=<sha256 of its token>,...`) | What every machine's shipper posts to `POST /v1/usage`: each agent conversation's tokens by model and minute, and the work it belongs to. Prices from LiteLLM's public table (`PRICES_URL`), read once a day | `tally.agents.cost` (this month at API prices) by `machine`, `model`, `role`; `tally.agents.tokens` by those and `kind`; `tally.agents.last_post` by `machine`; `tally.agents.batches` by `outcome` |
+| `agents` | `AGENTS_DB` (the store's path), with `SHIP_TOKENS` (`machine=<sha256 of its token>,...`) | What every machine's shipper posts to `POST /v1/usage`: each agent conversation's tokens by model and minute, and the work it belongs to. Prices from the estate's own dated table (`PRICES_FILE`), and LiteLLM's public table (`PRICES_URL`, read once a day) for any model or day it does not price | `tally.agents.cost` (this month at API prices) by `machine`, `model`, `role`; `tally.agents.tokens` by those and `kind`; `tally.agents.last_post` by `machine`; `tally.agents.batches` by `outcome` |
 | `billed` | `ORRERY_URL` with `ORRERY_READ_TOKEN`, an Orrery access token that reads | The bill month by month, as the estate's billing pipeline pushes it into Orrery: each `finops_billing_period`'s AI, the part of it billed for model use (`ai_models_cents`, when the pipeline writes it), and whole usage, and each `finops_program_portfolio_cost`'s AI by program. A month appears once the pipeline has run it, after the month closes | `tally.billed.ai`, `tally.billed.usage` for the newest billed month |
 | `gateway` | `GATEWAY_WORKSPACE`, the id of the Log Analytics workspace an AI gateway's token metrics land in, read with the Azure identity | What the gateway measured: every key's tokens and requests by day, product tier, and model, from its `llm-emit-token-metric` and `ai-request` metrics in `AppMetrics`, over this month and the `GATEWAY_MONTHS` (6) before it. A Claude model's prompt tokens leave out the cache and every other model's include it; both become input, cache reads, and cache writes as agent work counts them | `tally.gateway.tokens` (this month) by `model` and `kind`; `tally.gateway.requests` by `model`. A key is never a label |
+| `vantage` | `VANTAGE_URL` with `VANTAGE_TOKEN`, a hub token whose person sees every item the estate's agents work, and the `agents` collector on | A Vantage hub's change feed (`GET /api/v1/changes`) from where it left off: each claim a run made, with its run id, item, and agent; then each claimed item's scope (read again a day later, or when the item is scoped again) and the scope tree. Kept in the agent store | Feeds spend by item, program, and department below |
 | `subscriptions` | `USAGE_PROBE_ACCOUNTS` | The usage limits of every signed-in AI subscription account, through the provider's CLI, and the Claude build-account rotation. This is usage-probe, moved whole; see below. | `llm_quota_*` and `llm_rotation_*`, pushed under the service name `usage-probe` |
 | `runners` | `PROMETHEUS_URL` with `RUNNERS_NAMESPACE` (where the job pods run) and `RUNNERS_FORGE` (`github` for Actions Runner Controller, `gitlab` for GitLab's Kubernetes executor); `RUNNERS_NODES` (a pattern naming the pool's own nodes, such as `aks-ci-.*`) with `RUNNERS_NODE_PRICE` (one node an hour) when the pool has its own nodes; `GITLAB_URL` and `GITLAB_TOKEN` (`read_api`) to name GitLab projects | Over `RUNNERS_WINDOW` (7d): each repository's job pods, how long they ran and what CPU and memory they requested (sidecars included), the repository named from the runner set's listener gauges or the GitLab project; and the pool: its own nodes' hours, or its namespace's average share of the cluster's requests | Feeds the CI view below |
 | `actions` | `GITHUB_BILLING` (`user:<name>,org:<name>,...`) with `GITHUB_BILLING_TOKEN`, a token that reads those accounts' billing | GitHub's billing usage for Actions, by day, repository, and SKU, this month and last, every `GITHUB_BILLING_INTERVAL` (2h): minutes, list price, and what is owed after included minutes | Feeds the CI view below |
@@ -158,6 +159,62 @@ tally ship reset    # withdraw this machine's posts and start over (stop the lau
 To add a machine: make a token (`openssl rand -base64 32`), put it in
 `~/.config/tally/ship-token` there, add `name=<its sha256>` to
 `SHIP_TOKENS`, and install the shipper.
+
+### Prices
+
+The estate sets its own prices in a file (`PRICES_FILE`, such as a
+ConfigMap): for each model, dated versions of the price of input, output,
+cache read, and cache write, in dollars per million tokens. A token is
+priced at the version in force on its day (UTC), so a new price is a new
+version and the months before it keep theirs. A model the file does not
+list, or a day before its first version, takes LiteLLM's public table. The
+file is read at the start, where a wrong one stops tally, and every round
+after, where a wrong one fails the round and keeps the versions it had.
+
+```yaml
+models:
+  claude-opus-5-5:
+    - from: 2026-11-01
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25     # the five-minute write
+      cache_write_1h: 10    # left out, it is cache_write
+```
+
+### Runs, items, and programs
+
+A run is one working session of an agent, by the id the agent sends to
+Vantage in `X-Vantage-Run`. On a laptop Vantage's bridge sends the agent
+runtime's own session id, which is the id the shipper posts the
+conversation under, so a run is `claude:<run>` and every subagent
+conversation in it. The `vantage` collector reads which item each run
+claimed. Each minute of a run goes whole to the item it claimed most
+recently, or to its first item for minutes before any claim; a run that
+claimed nothing is unlinked.
+
+`GET /v1/agents/spend?from=2026-11-01&to=2026-11-30&tz=America/Chicago`
+answers the span's agent work by item; by program, the item's scope; by
+department, every scope above it with what lies under it; and by agent, as
+Vantage names it. It names no person, so everyone the board admits sees it,
+but an agent's host is a machine, so only `DETAIL_ROLE` sees an agent with
+its host. Spend by person stays in the day view's By user.
+
+A run's cost goes back to Vantage on the run's own record, where Vantage's
+program read and its spend detector add it up. When the bridge finishes a
+run that sent no cost, it runs the estate's cost command
+(`VANTAGE_RUN_COST`), which on a machine that ships is:
+
+```bash
+tally ship cost <run>   # {"amount":1.25,"currency":"USD","tokens":4200}
+```
+
+It asks the API port `GET /v1/runs/{run}` with the machine's shipping
+token, for a run the machine posted, reading `~/.config/tally/ship-url`
+(which `make install-ship` writes) and `ship-token` when `TALLY_URL` and
+`TALLY_TOKEN_FILE` are not set. What a run spends after it finishes, and
+the minute the shipper has not posted yet, stay out of the record; they
+count in tally.
 
 ### A managed fleet
 
@@ -387,7 +444,10 @@ page's telemetry goes through `POST /api/telemetry` as the Faro app
 | `AGENTS_BILLING` | `subscription` | How agent work is paid for. `subscription`: a plan pays, and its cost at API prices is what it would have cost. `api`: it is billed by the token, so the last 30 days of it join the `ai` category as spend, with this month and last month beside it |
 | `MACHINE_OWNERS` | empty | `machine=owner,...`: who each machine belongs to, as the board's By user names them |
 | `AGENTS_INTERVAL` | `5m` | How often the month's agent totals are exported |
-| `PRICES_URL` | LiteLLM's table | Where model prices are read, once a day |
+| `PRICES_URL` | LiteLLM's table | Where public model prices are read, once a day |
+| `PRICES_FILE` | off | The estate's own dated prices (see Prices); they win over the public table |
+| `VANTAGE_URL`, `VANTAGE_TOKEN` | off | A Vantage hub and a token that reads every item the estate's agents work; the `vantage` collector ties runs to items, programs, and departments |
+| `VANTAGE_INTERVAL` | `5m` | How often the hub's change feed is read |
 | `TALLY_URL`, `TALLY_TOKEN` or `TALLY_TOKEN_FILE` | | `tally ship`: where to post, and this machine's token |
 | `CLAUDE_PROJECTS`, `ION_DIR`, `T3_STATE`, `SHIP_STATE`, `SHIP_EVERY` | `~/.claude/projects`, `~/.ion`, `~/.t3/userdata/statev2.sqlite`, the user config folder, `1m` | `tally ship`: what it reads, where it keeps its place, and how often |
 | `SHIP_ROUTE` | empty | `tally ship`: an AI gateway's host, such as `ai.example.com`. Only replies that gateway served are posted; empty posts every reply |

@@ -1,0 +1,20 @@
+# The estate's own prices, in dollars per million tokens.
+models:
+  claude-opus-5-5:
+    - from: 2026-11-10
+      input: 4
+      output: 20
+      cache_read: 0.4
+      cache_write: 5
+    - from: 2026-11-01
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+      cache_write_1h: 10
+  us.anthropic.claude-sonnet-5-5:
+    - from: 2026-11-01
+      input: 3
+      output: 15
+      cache_read: 0.3
+      cache_write: 3.75

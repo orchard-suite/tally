@@ -5,12 +5,13 @@ info:
   summary: What the estate costs, and the agent work machines ship to it.
   description: |
     Tally answers on two ports. The session port serves the board and its
-    JSON (GET /v1/costs, /v1/agents, /v1/agents/days, /v1/pools). It sits
+    JSON (GET /v1/costs, /v1/agents, /v1/agents/days, /v1/agents/spend,
+    /v1/pools). It sits
     behind the front door, which signs a person in and passes who
     they are in X-Forwarded-Email and their roles in X-Forwarded-Groups;
     only the front door may reach it. The API port takes each machine's
-    shipper posts (POST /v1/usage), let in by the machine's bearer token
-    alone.
+    shipper posts (POST /v1/usage) and answers what one of its agent runs
+    cost (GET /v1/runs/{run}), let in by the machine's bearer token alone.
 
     Every error is a plain text message, one line long.
 tags:
@@ -160,6 +161,83 @@ paths:
         "401": { $ref: "#/components/responses/SignedOut" }
         "403": { $ref: "#/components/responses/NotYours" }
         "502": { $ref: "#/components/responses/PoolsUnread" }
+  /v1/agents/spend:
+    get:
+      operationId: getAgentSpend
+      tags: [costs]
+      summary: Agent work rolled up through the Vantage items its runs worked
+      description: |
+        Every day from `from` through `to`, priced at the prices in force on
+        each day, and rolled up through the item each run claimed in
+        Vantage: by item, by program (the item's scope), by department
+        (every scope above it, with what lies under it), and by agent. Each
+        minute of a run goes whole to the item it claimed most recently.
+        It names no person. An agent is named with its host only for a
+        person with the detail role.
+      security:
+        - frontDoor: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: The first day, as a date.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: The last day, as a date, on or after `from` and a limited number of days after it.
+          schema: { type: string, format: date }
+        - $ref: "#/components/parameters/Zone"
+      responses:
+        "200":
+          description: The spend.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpendReport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/SignedOut" }
+        "403": { $ref: "#/components/responses/NotYours" }
+        "404": { $ref: "#/components/responses/AgentsOff" }
+        "500": { $ref: "#/components/responses/Failed" }
+  /v1/runs/{run}:
+    get:
+      operationId: getRunCost
+      tags: [usage]
+      summary: What one agent run cost
+      description: |
+        The run's cost from what the machine its token names posted: the
+        conversation the run id names and every subagent conversation in
+        it, each minute at its day's price. It is the shape a Vantage run
+        record holds, and `tally ship cost` prints it for a bridge that
+        finishes a run. A machine prices only its own runs. Answered on the
+        API port. Only served when the agents collector is on.
+      security:
+        - shipToken: []
+      parameters:
+        - name: run
+          in: path
+          required: true
+          description: The run id, as the agent sent it to Vantage in X-Vantage-Run.
+          schema: { type: string, pattern: "^[A-Za-z0-9._-]{1,100}$" }
+      responses:
+        "200":
+          description: The run's cost.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunCost" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/UnknownToken" }
+        "404":
+          description: The machine posted no conversation of that run.
+          content:
+            text/plain:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/Failed" }
+        "503":
+          description: No price table has been read yet.
+          content:
+            text/plain:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/machine/headroom:
     get:
       operationId: getMachineHeadroom
@@ -789,6 +867,69 @@ components:
         cost: { type: number }
         agent_hours: { type: number }
         works: { type: integer }
+    RunCost:
+      type: object
+      required: [run, amount, currency, tokens, conversations]
+      properties:
+        run: { type: string }
+        amount: { type: number, description: The cost at the estate's prices. }
+        currency: { type: string, examples: [USD] }
+        tokens: { type: integer }
+        conversations: { type: integer }
+        through: { type: string, format: date-time, description: The end of the last minute priced. }
+    SpendLine:
+      type: object
+      required: [cost, tokens, runs]
+      properties:
+        cost: { type: number }
+        tokens: { type: integer }
+        runs: { type: integer, description: Distinct runs. }
+    SpendReport:
+      type: object
+      required: [from, to, currency, total, items, scopes, agents, unlinked, shows_hosts, unpriced]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        currency: { type: string }
+        total: { $ref: "#/components/schemas/SpendLine" }
+        items:
+          type: array
+          description: Each item a run worked, the costliest first.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/SpendLine"
+              - type: object
+                required: [item, scope]
+                properties:
+                  item: { type: string, examples: [ACME-7] }
+                  scope: { type: string, description: The item's program; empty for the whole estate. }
+        scopes:
+          type: array
+          description: Every scope with spend in it or under it, the top of the tree first.
+          items:
+            type: object
+            required: [scope, name, kind, own, total]
+            properties:
+              scope: { type: string }
+              name: { type: string }
+              kind: { type: string, description: The estate's word for the level, such as program or department. }
+              parent: { type: string }
+              own: { $ref: "#/components/schemas/SpendLine" }
+              total: { $ref: "#/components/schemas/SpendLine" }
+        agents:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/SpendLine"
+              - type: object
+                required: [agent]
+                properties:
+                  agent: { type: string, description: The agent as Vantage names it; its host only with the detail role. }
+        unlinked: { $ref: "#/components/schemas/SpendLine" }
+        shows_hosts: { type: boolean }
+        unpriced:
+          type: array
+          items: { type: string }
     Headroom:
       type: object
       required: [provider, rotating, usable, used, binding, bounds]

@@ -2,6 +2,7 @@ package estate
 
 import (
 	"sort"
+	"time"
 
 	"github.com/orchard-suite/tally/internal/agents"
 	"github.com/orchard-suite/tally/internal/collect/billed"
@@ -77,7 +78,7 @@ type ReconModel struct {
 
 // Reconcile lines the lenses up for every month the gateway read, oldest
 // first, with the bill's months and the shippers' months beside them.
-func Reconcile(bill *billed.Snapshot, gw *gateway.Snapshot, shipped []agents.MonthModel, prices agents.Prices) Reconciliation {
+func Reconcile(bill *billed.Snapshot, gw *gateway.Snapshot, shipped []agents.MonthModel, prices agents.Table) Reconciliation {
 	type pair struct{ gateway, shipped agents.Tokens }
 	byMonth := map[string]map[string]*pair{}
 	at := func(month, model string) *pair {
@@ -113,8 +114,10 @@ func Reconcile(bill *billed.Snapshot, gw *gateway.Snapshot, shipped []agents.Mon
 	for _, period := range periods {
 		m := ReconMonth{Period: period, Models: []ReconModel{}}
 		var seen int64
+		// A month's tokens take the prices in force on its first day.
+		first, _ := time.Parse("2006-01", period)
 		for model, p := range byMonth[period] {
-			rate, priced := prices[model]
+			rate, priced := prices.Rate(model, first)
 			priced = priced && model != ""
 			line := ReconModel{Model: model, Gateway: p.gateway.Total(), Shipped: p.shipped.Total(), Priced: priced}
 			if priced {
@@ -182,7 +185,7 @@ type KeyLine struct {
 
 // GatewayKeys is what every key used in month (such as 2026-10), the
 // costliest first. basis is the bill's basis for the month, or nil.
-func GatewayKeys(gw *gateway.Snapshot, month string, prices agents.Prices, basis *float64) []KeyLine {
+func GatewayKeys(gw *gateway.Snapshot, month string, prices agents.Table, basis *float64) []KeyLine {
 	out := []KeyLine{}
 	if gw == nil {
 		return out
@@ -200,7 +203,8 @@ func GatewayKeys(gw *gateway.Snapshot, month string, prices agents.Prices, basis
 			by[k] = line
 		}
 		line.Tokens += r.Total()
-		if rate, ok := prices[r.Model]; ok && r.Model != "" {
+		day, _ := time.Parse(time.DateOnly, r.Day)
+		if rate, ok := prices.Rate(r.Model, day); ok && r.Model != "" {
 			c := rate.Cost(r.Tokens)
 			line.Cost += c
 			total += c

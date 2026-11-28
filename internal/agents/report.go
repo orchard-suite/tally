@@ -119,7 +119,7 @@ const ongoing = 5 * time.Minute
 
 // BuildReport adds rows up from from to to. A cost belongs to the
 // conversation that spent it and is never split.
-func BuildReport(rows []Row, prices Prices, from, to, now time.Time) Report {
+func BuildReport(rows []Row, prices Table, from, to, now time.Time) Report {
 	rep := Report{From: from, To: to, ShowsUsers: true, ShowsWorks: true, Works: []WorkLine{}, Machines: []MachineLine{}, Models: []ModelLine{}, Unpriced: []string{}}
 	type convKey struct{ machine, id string }
 	type minuteKey struct {
@@ -150,7 +150,7 @@ func BuildReport(rows []Row, prices Prices, from, to, now time.Time) Report {
 	for _, r := range rows {
 		model := Model(r.Model)
 		cost := 0.0
-		rate, priced := prices[model]
+		rate, priced := prices.Rate(model, r.Minute)
 		if priced {
 			cost = rate.Cost(r.Tokens)
 		} else {

@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -33,6 +34,7 @@ import (
 	"github.com/orchard-suite/tally/internal/collect/promapi"
 	"github.com/orchard-suite/tally/internal/collect/runners"
 	"github.com/orchard-suite/tally/internal/collect/subscriptions"
+	"github.com/orchard-suite/tally/internal/collect/vantage"
 	"github.com/orchard-suite/tally/internal/estate"
 	"github.com/orchard-suite/tally/internal/server"
 	"github.com/orchard-suite/tally/internal/ship"
@@ -45,6 +47,7 @@ const help = `tally serve                   collect on a schedule, export, and s
 tally ship                    post this machine's agent usage to tally, every minute (TALLY_URL, TALLY_TOKEN_FILE)
 tally ship once               one round, then stop
 tally ship reset              withdraw everything this machine posted and forget its place (stop the shipper first)
+tally ship cost <run>         print what one agent run cost, of what this machine posted, as a Vantage run record holds it
 tally ` + "`check`, `login`, `logout`" + `: the subscriptions collector's commands, as usage-probe had them:
 ` + subscriptions.Help
 
@@ -183,6 +186,17 @@ func run(ctx context.Context, log *slog.Logger) error {
 		sources.Shipped = ag.Shipped
 		sources.Prices = ag.Prices
 	}
+	var runStore vantage.Store
+	if ag != nil {
+		runStore = ag.Store()
+	}
+	vt, err := vantage.FromEnv(log, inst, runStore)
+	if err != nil {
+		return err
+	}
+	if vt != nil {
+		collectors = append(collectors, vt)
+	}
 	zone, err := collect.Zone()
 	if err != nil {
 		return err
@@ -283,6 +297,9 @@ func run(ctx context.Context, log *slog.Logger) error {
 
 // runShip is `tally ship`: this machine's shipper, every minute or once.
 func runShip(ctx context.Context, log *slog.Logger, args []string) error {
+	if len(args) == 2 && args[0] == "cost" {
+		return shipCost(ctx, args[1])
+	}
 	if len(args) > 1 || (len(args) == 1 && args[0] != "once" && args[0] != "reset") {
 		fmt.Fprintln(os.Stderr, help)
 		os.Exit(2)
@@ -303,6 +320,20 @@ func runShip(ctx context.Context, log *slog.Logger, args []string) error {
 		return s.Round(ctx)
 	}
 	return s.Run(ctx)
+}
+
+// shipCost is `tally ship cost <run>`: the run's cost as one JSON line on
+// stdout, and nothing else there, since a Vantage bridge reads it whole.
+func shipCost(ctx context.Context, run string) error {
+	base, token, err := ship.CostConfig()
+	if err != nil {
+		return err
+	}
+	c, err := ship.Cost(ctx, base, token, run)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(c)
 }
 
 func env(key, fallback string) string {
